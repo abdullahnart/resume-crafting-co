@@ -1,0 +1,98 @@
+import { TemplateProps } from '@/types/resume';
+
+export function CreativeTemplate({ data, accentColor }: TemplateProps) {
+  const { personalInfo: p, summary, experience, education, skills, languages, certifications, projects } = data;
+
+  return (
+    <div className="text-[11px] leading-relaxed text-gray-900" style={{ fontFamily: "'Source Sans 3', sans-serif" }}>
+      {/* Bold Header */}
+      <div className="p-6 pb-4" style={{ backgroundColor: accentColor }}>
+        <h1 className="text-3xl font-black text-white tracking-tight">{p.fullName || 'Your Name'}</h1>
+        {p.jobTitle && <p className="text-base text-white/80 font-light mt-1">{p.jobTitle}</p>}
+        <div className="flex gap-3 mt-3 text-[10px] text-white/70 flex-wrap">
+          {p.email && <span className="bg-white/10 px-2 py-0.5 rounded">{p.email}</span>}
+          {p.phone && <span className="bg-white/10 px-2 py-0.5 rounded">{p.phone}</span>}
+          {p.location && <span className="bg-white/10 px-2 py-0.5 rounded">{p.location}</span>}
+          {p.linkedin && <span className="bg-white/10 px-2 py-0.5 rounded">{p.linkedin}</span>}
+        </div>
+      </div>
+
+      <div className="p-6 pt-4 space-y-4">
+        {summary && (
+          <div className="border-l-4 pl-3" style={{ borderColor: accentColor }}>
+            <p className="text-gray-600 italic">{summary}</p>
+          </div>
+        )}
+
+        {experience.length > 0 && (
+          <div>
+            <h2 className="text-sm font-black uppercase mb-2" style={{ color: accentColor }}>
+              ▎Experience
+            </h2>
+            {experience.map(exp => (
+              <div key={exp.id} className="mb-3 pl-3 border-l-2 border-gray-200">
+                <div className="font-bold">{exp.role} <span className="font-normal text-gray-500">@ {exp.company}</span></div>
+                <div className="text-[10px] text-gray-400">{exp.startDate} → {exp.current ? 'Now' : exp.endDate}</div>
+                <ul className="mt-1 text-gray-700 space-y-0.5">
+                  {exp.bullets.filter(b => b).map((b, i) => <li key={i}>→ {b}</li>)}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {education.length > 0 && (
+          <div>
+            <h2 className="text-sm font-black uppercase mb-2" style={{ color: accentColor }}>▎Education</h2>
+            {education.map(edu => (
+              <div key={edu.id} className="mb-2 pl-3 border-l-2 border-gray-200">
+                <div className="font-bold">{edu.degree} {edu.field && `— ${edu.field}`}</div>
+                <div className="text-gray-500">{edu.school} · {edu.startDate}–{edu.endDate}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {skills.length > 0 && (
+          <div>
+            <h2 className="text-sm font-black uppercase mb-2" style={{ color: accentColor }}>▎Skills</h2>
+            <div className="flex flex-wrap gap-1.5">
+              {skills.map(s => (
+                <span key={s.id} className="px-2 py-0.5 rounded-full text-white text-[10px] font-medium" style={{ backgroundColor: accentColor }}>
+                  {s.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-4">
+          {languages.length > 0 && (
+            <div>
+              <h2 className="text-sm font-black uppercase mb-1" style={{ color: accentColor }}>▎Languages</h2>
+              {languages.map(l => <p key={l.id} className="text-gray-600">{l.name} — {l.proficiency}</p>)}
+            </div>
+          )}
+          {certifications.length > 0 && (
+            <div>
+              <h2 className="text-sm font-black uppercase mb-1" style={{ color: accentColor }}>▎Certifications</h2>
+              {certifications.map(c => <p key={c.id} className="text-gray-600">{c.name}</p>)}
+            </div>
+          )}
+        </div>
+
+        {projects.length > 0 && (
+          <div>
+            <h2 className="text-sm font-black uppercase mb-2" style={{ color: accentColor }}>▎Projects</h2>
+            {projects.map(proj => (
+              <div key={proj.id} className="mb-1">
+                <span className="font-bold">{proj.name}</span>
+                {proj.description && <span className="text-gray-500"> — {proj.description}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
