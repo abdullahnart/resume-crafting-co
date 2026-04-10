@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { WorkExperience, Education, Skill, Language, Certification, Project } from '@/types/resume';
 import { Plus, Trash2, GripVertical } from 'lucide-react';
+import { ResumeUploader } from './ResumeUploader';
 
 const uid = () => crypto.randomUUID();
 
@@ -20,6 +21,7 @@ export function PersonalInfoForm() {
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold font-[var(--font-heading)]">Personal Information</h2>
+      <ResumeUploader />
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           <Label>Full Name</Label>
