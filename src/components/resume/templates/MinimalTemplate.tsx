@@ -56,7 +56,9 @@ export function MinimalTemplate({ data }: TemplateProps) {
       {skills.length > 0 && (
         <div className="mb-6">
           <h2 className="text-[10px] uppercase tracking-[0.2em] text-gray-400 mb-2">Skills</h2>
-          <p className="text-gray-600">{skills.map(s => s.name).filter(Boolean).join(', ')}</p>
+          <ul className="list-disc list-inside text-gray-600 space-y-0.5">
+            {skills.map(s => s.name).filter(Boolean).map(name => <li key={name}>{name}</li>)}
+          </ul>
         </div>
       )}
 
@@ -79,7 +81,9 @@ export function MinimalTemplate({ data }: TemplateProps) {
           <h2 className="text-[10px] uppercase tracking-[0.2em] text-gray-400 mb-2">Projects</h2>
           {projects.map(proj => (
             <div key={proj.id} className="mb-1">
-              <span className="font-semibold">{proj.name}</span>
+              <a href={proj.url} target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-2">
+                {proj.name}
+              </a>
               {proj.description && <span className="text-gray-500"> — {proj.description}</span>}
             </div>
           ))}

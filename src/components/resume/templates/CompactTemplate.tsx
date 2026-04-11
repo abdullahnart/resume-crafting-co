@@ -57,7 +57,9 @@ export function CompactTemplate({ data, accentColor }: TemplateProps) {
           {skills.length > 0 && (
             <div className="mb-2">
               <h2 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: accentColor }}>Skills</h2>
-              <p className="text-gray-600">{skills.map(s => s.name).filter(Boolean).join(', ')}</p>
+              <ul className="list-disc list-inside text-gray-600 space-y-0.5">
+                {skills.map(s => s.name).filter(Boolean).map(name => <li key={name}>{name}</li>)}
+              </ul>
             </div>
           )}
 
@@ -80,9 +82,14 @@ export function CompactTemplate({ data, accentColor }: TemplateProps) {
       {projects.length > 0 && (
         <div>
           <h2 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: accentColor }}>Projects</h2>
-          {projects.map(proj => (
-            <span key={proj.id} className="text-gray-600">{proj.name}{proj.description && `: ${proj.description}`} · </span>
-          ))}
+          <div className="space-y-0.5">
+            {projects.map(proj => (
+              <div key={proj.id} className="text-gray-600">
+                <a href={proj.url} target="_blank" rel="noreferrer" className="underline underline-offset-2">{proj.name}</a>
+                {proj.description && `: ${proj.description}`}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

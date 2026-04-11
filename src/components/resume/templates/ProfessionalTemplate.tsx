@@ -64,11 +64,9 @@ export function ProfessionalTemplate({ data, accentColor }: TemplateProps) {
             {skills.length > 0 && (
               <div>
                 <h2 className="text-xs font-bold uppercase tracking-wider pb-1 border-b-2 mb-2" style={{ color: accentColor, borderColor: accentColor }}>Skills</h2>
-                <div className="flex flex-wrap gap-1">
-                  {skills.map(s => (
-                    <span key={s.id} className="border px-1.5 py-0.5 rounded text-[10px]" style={{ borderColor: accentColor, color: accentColor }}>{s.name}</span>
-                  ))}
-                </div>
+                <ul className="list-disc list-inside text-gray-700 space-y-0.5">
+                  {skills.map(s => <li key={s.id}>{s.name}</li>)}
+                </ul>
               </div>
             )}
 
@@ -95,7 +93,9 @@ export function ProfessionalTemplate({ data, accentColor }: TemplateProps) {
             <h2 className="text-xs font-bold uppercase tracking-wider pb-1 border-b-2 mb-2" style={{ color: accentColor, borderColor: accentColor }}>Projects</h2>
             {projects.map(proj => (
               <div key={proj.id} className="mb-1">
-                <span className="font-bold">{proj.name}</span>
+                <a href={proj.url} target="_blank" rel="noreferrer" className="font-bold underline underline-offset-2">
+                  {proj.name}
+                </a>
                 {proj.description && <span className="text-gray-600"> — {proj.description}</span>}
               </div>
             ))}
