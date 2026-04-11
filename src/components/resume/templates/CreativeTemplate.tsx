@@ -56,13 +56,9 @@ export function CreativeTemplate({ data, accentColor }: TemplateProps) {
         {skills.length > 0 && (
           <div>
             <h2 className="text-sm font-black uppercase mb-2" style={{ color: accentColor }}>▎Skills</h2>
-            <div className="flex flex-wrap gap-1.5">
-              {skills.map(s => (
-                <span key={s.id} className="px-2 py-0.5 rounded-full text-white text-[10px] font-medium" style={{ backgroundColor: accentColor }}>
-                  {s.name}
-                </span>
-              ))}
-            </div>
+            <ul className="list-disc list-inside text-gray-700 space-y-0.5">
+              {skills.map(s => <li key={s.id}>{s.name}</li>)}
+            </ul>
           </div>
         )}
 
@@ -86,7 +82,9 @@ export function CreativeTemplate({ data, accentColor }: TemplateProps) {
             <h2 className="text-sm font-black uppercase mb-2" style={{ color: accentColor }}>▎Projects</h2>
             {projects.map(proj => (
               <div key={proj.id} className="mb-1">
-                <span className="font-bold">{proj.name}</span>
+                <a href={proj.url} target="_blank" rel="noreferrer" className="font-bold underline underline-offset-2">
+                  {proj.name}
+                </a>
                 {proj.description && <span className="text-gray-500"> — {proj.description}</span>}
               </div>
             ))}

@@ -65,7 +65,9 @@ export function ClassicTemplate({ data, accentColor }: TemplateProps) {
       {skills.length > 0 && (
         <div className="mb-4">
           <h2 className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: accentColor }}>Skills</h2>
-          <p className="text-gray-700">{skills.map(s => s.name).filter(Boolean).join(' • ')}</p>
+          <ul className="list-disc list-inside text-gray-700 space-y-0.5">
+            {skills.map(s => s.name).filter(Boolean).map(name => <li key={name}>{name}</li>)}
+          </ul>
         </div>
       )}
 
@@ -93,7 +95,9 @@ export function ClassicTemplate({ data, accentColor }: TemplateProps) {
           <h2 className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: accentColor }}>Projects</h2>
           {projects.map(proj => (
             <div key={proj.id} className="mb-1">
-              <span className="font-bold">{proj.name}</span>
+              <a href={proj.url} target="_blank" rel="noreferrer" className="font-bold underline underline-offset-2">
+                {proj.name}
+              </a>
               {proj.description && <span className="text-gray-600"> — {proj.description}</span>}
               {proj.url && <span className="text-gray-500 text-[10px]"> ({proj.url})</span>}
             </div>

@@ -16,6 +16,7 @@ async function extractTextWithStructure(page: any): Promise<string> {
   const content = await page.getTextContent();
   const Y_TOLERANCE = 3;
   const X_GAP_THRESHOLD = 12;
+  const viewport = page.getViewport({ scale: 1 });
 
   const items: PositionedTextItem[] = (content.items as any[])
     .filter(item => item.str?.trim())
@@ -57,6 +58,31 @@ async function extractTextWithStructure(page: any): Promise<string> {
       })
       .join('\n');
   };
+
+  const midX = viewport.width / 2;
+  const leftItems = items.filter(item => item.x + item.width / 2 < midX);
+  const rightItems = items.filter(item => item.x + item.width / 2 >= midX);
+
+  const leftText = buildStructuredText(leftItems);
+  const rightText = buildStructuredText(rightItems);
+  const sidebarRe = /(^|\n)(ADDRESS|ABOUT\s*ME|SKILLS|CONTACT)(\n|$)/i;
+  const mainContentScore = (value: string) => {
+    const bullets = (value.match(/(^|\n)[•\-*►▪]/g) || []).length;
+    const jobs = (value.match(/\|/g) || []).length;
+    return bullets * 2 + jobs;
+  };
+
+  const hasSidebarSplit = leftItems.length >= 12
+    && rightItems.length >= 12
+    && (sidebarRe.test(leftText) || sidebarRe.test(rightText));
+
+  if (hasSidebarSplit) {
+    const primaryFirst = mainContentScore(leftText) >= mainContentScore(rightText)
+      ? [leftText, rightText]
+      : [rightText, leftText];
+
+    return primaryFirst.filter(Boolean).join('\n');
+  }
 
   return buildStructuredText(items);
 }

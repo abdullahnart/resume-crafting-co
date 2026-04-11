@@ -21,16 +21,9 @@ export function ModernTemplate({ data, accentColor }: TemplateProps) {
         {skills.length > 0 && (
           <div className="mb-5">
             <h2 className="text-xs font-bold uppercase tracking-wider border-b border-white/30 pb-1 mb-2">Skills</h2>
-            {skills.map(s => (
-              <div key={s.id} className="mb-1.5">
-                <span>{s.name}</span>
-                <div className="w-full h-1 bg-white/20 rounded mt-0.5">
-                  <div className="h-full bg-white/80 rounded" style={{
-                    width: s.level === 'beginner' ? '25%' : s.level === 'intermediate' ? '50%' : s.level === 'advanced' ? '75%' : '100%'
-                  }} />
-                </div>
-              </div>
-            ))}
+            <ul className="list-disc list-inside space-y-1 text-[10px]">
+              {skills.map(s => <li key={s.id}>{s.name}</li>)}
+            </ul>
           </div>
         )}
 
@@ -94,7 +87,9 @@ export function ModernTemplate({ data, accentColor }: TemplateProps) {
             <h2 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>Projects</h2>
             {projects.map(proj => (
               <div key={proj.id} className="mb-2">
-                <span className="font-bold">{proj.name}</span>
+                <a href={proj.url} target="_blank" rel="noreferrer" className="font-bold underline underline-offset-2">
+                  {proj.name}
+                </a>
                 {proj.description && <p className="text-gray-600">{proj.description}</p>}
               </div>
             ))}
