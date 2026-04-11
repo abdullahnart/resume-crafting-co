@@ -16,7 +16,6 @@ async function extractTextWithStructure(page: any): Promise<string> {
   const content = await page.getTextContent();
   const Y_TOLERANCE = 3;
   const X_GAP_THRESHOLD = 12;
-  const viewport = page.getViewport({ scale: 1 });
 
   const items: PositionedTextItem[] = (content.items as any[])
     .filter(item => item.str?.trim())
@@ -58,17 +57,6 @@ async function extractTextWithStructure(page: any): Promise<string> {
       })
       .join('\n');
   };
-
-  const midX = viewport.width / 2;
-  const leftItems = items.filter(item => item.x + item.width / 2 < midX);
-  const rightItems = items.filter(item => item.x + item.width / 2 >= midX);
-  const hasTwoColumns = leftItems.length >= 12 && rightItems.length >= 12;
-
-  if (hasTwoColumns) {
-    return [buildStructuredText(leftItems), buildStructuredText(rightItems)]
-      .filter(Boolean)
-      .join('\n');
-  }
 
   return buildStructuredText(items);
 }
@@ -119,7 +107,11 @@ const SECTION_HEADERS: Record<string, RegExp> = {
 
 const PAGE_MARKER_RE = /^page\s+\d+$/i;
 
-const stripFormatting = (value: string) => value.replace(/^#+\s*/, '').replace(/\*\*/g, '').trim();
+const stripFormatting = (value: string) => value
+  .replace(/^#+\s*/, '')
+  .replace(/^\*+|\*+$/g, '')
+  .replace(/\*\*/g, '')
+  .trim();
 const normalizeLine = (value: string) => stripFormatting(value).replace(/\s+/g, ' ').trim();
 const normalizeSectionCandidate = (value: string) => normalizeLine(value).replace(/:$/, '').trim();
 
@@ -208,7 +200,7 @@ function parsePersonalInfo(header: string, addressSection?: string) {
 const DURATION_RE = /(\d+(?:\.\d+)?\s*(?:months?|years?)\s*(?:of\s*)?experience|\d+(?:\.\d+)?\s*months?\s*experience)/i;
 const DATE_TOKEN = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s*\\d{4}|\\d{1,2}[/-]\\d{4}|\\d{4}|present|current|now';
 const DATE_RANGE_RE = new RegExp(`(${DATE_TOKEN})\\s*(?:to|-|–|—)\\s*(${DATE_TOKEN})`, 'i');
-const CURRENTLY_WORKING_RE = /currently\s*(?:work|working)\s*here/i;
+const CURRENTLY_WORKING_RE = /currently\s*(?:work|working)(?:\s*here)?/i;
 
 function normalizeDateValue(value: string): string {
   const cleaned = normalizeLine(value).replace(/\.$/, '');
@@ -264,6 +256,7 @@ function parseExperience(text: string): WorkExperience[] {
   const entries: WorkExperience[] = [];
   let current: Partial<WorkExperience> | null = null;
   let pendingDateInfo: Partial<ExperienceDateInfo> | null = null;
+  let pendingCurrentEntry = false;
 
   const flushCurrent = () => {
     if (current && (current.company || current.role)) {
@@ -280,18 +273,34 @@ function parseExperience(text: string): WorkExperience[] {
      current = null;
   };
 
+  const isStubEntry = () => Boolean(current?.company && !current.role && !(current.bullets?.length));
+
   const startEntry = (company: string, role = '') => {
-    flushCurrent();
-    current = {
-      company: normalizeLine(company),
-      role: normalizeLine(role),
-      startDate: '',
-      endDate: '',
-      current: false,
-      bullets: [],
-    };
-    applyDateInfo(current, pendingDateInfo);
-    pendingDateInfo = null;
+    if (isStubEntry()) {
+      current = {
+        ...current,
+        company: normalizeLine(company),
+        role: normalizeLine(role),
+      };
+    } else {
+      flushCurrent();
+      current = {
+        company: normalizeLine(company),
+        role: normalizeLine(role),
+        startDate: '',
+        endDate: '',
+        current: false,
+        bullets: [],
+      };
+    }
+
+    if (pendingCurrentEntry) {
+      applyDateInfo(current, { endDate: 'Present', current: true });
+      pendingCurrentEntry = false;
+    } else if (pendingDateInfo) {
+      applyDateInfo(current, pendingDateInfo);
+      pendingDateInfo = null;
+    }
   };
 
   for (let i = 0; i < lines.length; i++) {
@@ -306,11 +315,13 @@ function parseExperience(text: string): WorkExperience[] {
 
     if (isHr || PAGE_MARKER_RE.test(line) || isKnownSectionHeader(line)) continue;
 
+    if (pendingCurrentEntry && /^here$/i.test(line)) continue;
+
     if (CURRENTLY_WORKING_RE.test(line)) {
       if (current) {
         applyDateInfo(current, { endDate: 'Present', current: true });
       } else {
-        pendingDateInfo = { ...(pendingDateInfo || {}), endDate: 'Present', current: true };
+        pendingCurrentEntry = true;
       }
       continue;
     }
@@ -386,8 +397,8 @@ function parseEducation(text: string): Education[] {
   };
 
   for (const rawLine of lines) {
-    const isBullet = /^[•\-–—*►▪]\s/.test(rawLine);
-    const cleanLine = normalizeLine(rawLine.replace(/^[•\-–—*►▪]\s*/, ''));
+    const isBullet = /^[•\-–—►▪]\s/.test(rawLine) || /^\d+\.\s/.test(rawLine);
+    const cleanLine = normalizeLine(rawLine.replace(/^[•\-–—►▪]\s*/, '').replace(/^\d+\.\s*/, ''));
     
     if (!cleanLine || PAGE_MARKER_RE.test(cleanLine) || isKnownSectionHeader(cleanLine)) continue;
 
