@@ -111,4 +111,95 @@ https://innerpeaceart.com/`);
       expect.objectContaining({ name: 'innerpeaceart.com', url: 'https://innerpeaceart.com/' }),
     ]);
   });
+
+  it('keeps continued work history out of skills when a sidebar section comes before page two content', () => {
+    const parsed = parseResumeText(`Abdullah Naseem
++92 324 8204797
+abdullah.dev1997@gmail.com
+
+WORK
+**Al Rehman Technology | CMS Developer**
+Currently Work Here
+* Customized WooCommerce plugin for enhanced functionality and user experience.
+
+**Proficient Digital | Senior Frontend Developer | CMS Developer**
+2.5 Years of Experience 2020 to 2023
+* Create a custom theme from scratch
+
+**Digitonics Labs | Jr. Executive Web Developer**
+6 Months Experience 2019 to 2020
+* Working on custom theme (scratch theme)
+
+ADDRESS
+A 4/3 Muhammadi Colony
+Karachi
+
+ABOUT ME
+I am Experienced WordPress developer.
+
+SKILLS
+Wordpress
+HTML
+CSS
+Customization
+Javascript
+Bootstrap
+JQuery
+PHP
+---PAGE_BREAK---
+4 Months Experience 2019 to 2020
+**Just Digital Pvt Ltd**
+**Jr. Wordpress Developer**
+* Design a Creative and Professional website
+* Theme Customization
+
+6 Month Experience 2018 to 2019
+**PNT Global**
+**Internship Wordpress Developer**
+* Build websites using WordPress.
+* Provide technical support to clients.
+
+EDUCATION
+**Bachelors in Commerce**
+From Premiere Govt. College
+
+PORTFOLIO
+https://bridesforacause.com/
+https://slcexcavating.com/
+https://innerpeaceart.com/
+https://gigidev.clickysoft.us/`);
+
+    expect(parsed.experience).toHaveLength(5);
+    expect(parsed.experience?.[0]).toMatchObject({ endDate: 'Present', current: true });
+    expect(parsed.experience?.[3]).toMatchObject({
+      company: 'Just Digital Pvt Ltd',
+      role: 'Jr. Wordpress Developer',
+      startDate: '2019',
+      endDate: '2020',
+    });
+    expect(parsed.experience?.[4]).toMatchObject({
+      company: 'PNT Global',
+      role: 'Internship Wordpress Developer',
+      startDate: '2018',
+      endDate: '2019',
+    });
+
+    expect(parsed.skills?.map(skill => skill.name)).toEqual([
+      'Wordpress',
+      'HTML',
+      'CSS',
+      'Customization',
+      'Javascript',
+      'Bootstrap',
+      'JQuery',
+      'PHP',
+    ]);
+
+    expect(parsed.projects).toEqual([
+      expect.objectContaining({ name: 'bridesforacause.com', url: 'https://bridesforacause.com/' }),
+      expect.objectContaining({ name: 'slcexcavating.com', url: 'https://slcexcavating.com/' }),
+      expect.objectContaining({ name: 'innerpeaceart.com', url: 'https://innerpeaceart.com/' }),
+      expect.objectContaining({ name: 'gigidev.clickysoft.us', url: 'https://gigidev.clickysoft.us/' }),
+    ]);
+  });
 });

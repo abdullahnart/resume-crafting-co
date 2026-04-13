@@ -131,7 +131,7 @@ const SECTION_HEADERS: Record<string, RegExp> = {
   address: /^(?:ADDRESS|CONTACT)\s*$/im,
 };
 
-const PAGE_MARKER_RE = /^page\s+\d+$/i;
+const PAGE_MARKER_RE = /^(?:page\s+\d+|---PAGE_BREAK---)$/i;
 
 const stripFormatting = (value: string) => value
   .replace(/^#+\s*/, '')
@@ -144,6 +144,47 @@ const normalizeSectionCandidate = (value: string) => normalizeLine(value).replac
 function isKnownSectionHeader(line: string): boolean {
   const normalized = normalizeSectionCandidate(line);
   return Object.values(SECTION_HEADERS).some(re => re.test(normalized));
+}
+
+function looksLikeExperienceContinuation(text: string): boolean {
+  const normalized = text.trim();
+  if (!normalized) return false;
+
+  const bulletCount = (normalized.match(/(^|\n)[•\-*►▪]/g) || []).length;
+  const hasDateInfo = DATE_RANGE_RE.test(normalized) || DURATION_RE.test(normalized) || CURRENTLY_WORKING_RE.test(normalized);
+  const hasRoleKeyword = /\b(?:developer|engineer|designer|manager|internship|intern|executive|lead|specialist)\b/i.test(normalized);
+
+  return bulletCount >= 2 && hasDateInfo && hasRoleKeyword;
+}
+
+function moveContinuationBlock(
+  result: Record<string, string>,
+  sourceKey: string,
+  targetKey: string,
+  predicate: (value: string) => boolean,
+) {
+  const source = result[sourceKey];
+  if (!source?.includes('---PAGE_BREAK---')) return;
+
+  const blocks = source.split(/\n?---PAGE_BREAK---\n?/).map(block => block.trim()).filter(Boolean);
+  if (blocks.length < 2) return;
+
+  const keptBlocks: string[] = [];
+  const movedBlocks: string[] = [];
+
+  blocks.forEach((block, index) => {
+    if (index > 0 && predicate(block)) {
+      movedBlocks.push(block);
+      return;
+    }
+
+    keptBlocks.push(block);
+  });
+
+  if (!movedBlocks.length) return;
+
+  result[sourceKey] = keptBlocks.join('\n').trim();
+  result[targetKey] = [result[targetKey], ...movedBlocks].filter(Boolean).join('\n').trim();
 }
 
 function splitSections(text: string): Record<string, string> {
@@ -181,6 +222,8 @@ function splitSections(text: string): Record<string, string> {
       result[sections[i].key] = sectionContent;
     }
   }
+
+  moveContinuationBlock(result, 'skills', 'experience', looksLikeExperienceContinuation);
 
   return result;
 }
@@ -491,9 +534,11 @@ function parseSkills(text: string): Skill[] {
   const cleaned = text.replace(/\[[\]|\s]+\]/g, '');
   const seen = new Set<string>();
   const items = cleaned
-    .split(/\n|,|;|•|·|\|/)
+    .split(/\n|,|;|•|·/)
     .map(s => normalizeLine(s))
     .filter(s => s.length > 1 && s.length < 40 && !isKnownSectionHeader(s) && !PAGE_MARKER_RE.test(s))
+    .filter(s => !DATE_RANGE_RE.test(s) && !DURATION_RE.test(s) && !CURRENTLY_WORKING_RE.test(s))
+    .filter(s => !/(https?:\/\/|www\.|linkedin\.com)/i.test(s))
     .filter(s => {
       const key = s.toLowerCase();
       if (seen.has(key)) return false;
