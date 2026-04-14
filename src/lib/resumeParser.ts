@@ -9,13 +9,69 @@ type PositionedTextItem = {
   width: number;
 };
 
+type StructuredLine = {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+};
+
 type ExperienceDateInfo = Pick<WorkExperience, 'startDate' | 'endDate' | 'current'>;
+
+const STRUCTURED_LINE_Y_TOLERANCE = 3;
+const STRUCTURED_LINE_X_GAP_THRESHOLD = 12;
+const BULLET_LINE_RE = /(^|\n)\s*[•\-–—*►▪]/g;
+const BULLET_PREFIX_RE = /^[•\-–—*►▪]\s*/;
+
+const normalizeStructuredText = (value: string) => value.replace(/\s+/g, ' ').trim();
+
+function buildStructuredLines(pageItems: PositionedTextItem[]): StructuredLine[] {
+  const lineMap = new Map<number, Array<{ str: string; x: number; width: number }>>();
+
+  for (const item of pageItems) {
+    const y = Math.round(item.y / STRUCTURED_LINE_Y_TOLERANCE) * STRUCTURED_LINE_Y_TOLERANCE;
+    if (!lineMap.has(y)) lineMap.set(y, []);
+    lineMap.get(y)!.push({
+      str: item.str,
+      x: item.x,
+      width: item.width,
+    });
+  }
+
+  return Array.from(lineMap.entries())
+    .sort((a, b) => b[0] - a[0])
+    .map(([y, lineItems]) => {
+      lineItems.sort((a, b) => a.x - b.x);
+
+      let text = '';
+      for (let i = 0; i < lineItems.length; i++) {
+        if (i > 0 && lineItems[i].x - (lineItems[i - 1].x + lineItems[i - 1].width) > STRUCTURED_LINE_X_GAP_THRESHOLD) {
+          text += '  ';
+        } else if (i > 0) {
+          text += ' ';
+        }
+
+        text += lineItems[i].str;
+      }
+
+      const minX = Math.min(...lineItems.map(item => item.x));
+      const maxX = Math.max(...lineItems.map(item => item.x + item.width));
+
+      return {
+        text: normalizeStructuredText(text),
+        x: minX,
+        y,
+        width: maxX - minX,
+      };
+    })
+    .filter(line => line.text);
+}
+
+const linesToText = (lines: StructuredLine[]) => lines.map(line => line.text).join('\n');
 
 // --- Coordinate-based PDF text extraction ---
 async function extractTextWithStructure(page: any): Promise<string> {
   const content = await page.getTextContent();
-  const Y_TOLERANCE = 3;
-  const X_GAP_THRESHOLD = 12;
   const viewport = page.getViewport({ scale: 1 });
 
   const items: PositionedTextItem[] = (content.items as any[])
@@ -27,64 +83,74 @@ async function extractTextWithStructure(page: any): Promise<string> {
       width: item.width || item.str.length * 5,
     }));
 
-  const buildStructuredText = (pageItems: PositionedTextItem[]) => {
-    const lineMap = new Map<number, Array<{ str: string; x: number; width: number }>>();
-
-    for (const item of pageItems) {
-      const y = Math.round(item.y / Y_TOLERANCE) * Y_TOLERANCE;
-      if (!lineMap.has(y)) lineMap.set(y, []);
-      lineMap.get(y)!.push({
-        str: item.str,
-        x: item.x,
-        width: item.width,
-      });
-    }
-
-    return Array.from(lineMap.entries())
-      .sort((a, b) => b[0] - a[0])
-      .map(([_, lineItems]) => {
-        lineItems.sort((a, b) => a.x - b.x);
-        let line = '';
-
-        for (let i = 0; i < lineItems.length; i++) {
-          if (i > 0 && lineItems[i].x - (lineItems[i - 1].x + lineItems[i - 1].width) > X_GAP_THRESHOLD) {
-            line += '  ';
-          }
-
-          line += lineItems[i].str;
-        }
-
-        return line;
-      })
-      .join('\n');
-  };
+  const lines = buildStructuredLines(items);
 
   const midX = viewport.width / 2;
-  const leftItems = items.filter(item => item.x + item.width / 2 < midX);
-  const rightItems = items.filter(item => item.x + item.width / 2 >= midX);
+  const leftLines = lines.filter(line => line.x + line.width / 2 < midX);
+  const rightLines = lines.filter(line => line.x + line.width / 2 >= midX);
 
-  const leftText = buildStructuredText(leftItems);
-  const rightText = buildStructuredText(rightItems);
+  const leftText = linesToText(leftLines);
+  const rightText = linesToText(rightLines);
   const sidebarRe = /(^|\n)(ADDRESS|ABOUT\s*ME|SKILLS|CONTACT)(\n|$)/i;
   const mainContentScore = (value: string) => {
-    const bullets = (value.match(/(^|\n)[•\-*►▪]/g) || []).length;
+    const bullets = (value.match(BULLET_LINE_RE) || []).length;
     const jobs = (value.match(/\|/g) || []).length;
     return bullets * 2 + jobs;
   };
 
-  const hasSidebarSplit = leftItems.length >= 12
-    && rightItems.length >= 12
+  const hasSidebarSplit = leftLines.length >= 12
+    && rightLines.length >= 12
     && (sidebarRe.test(leftText) || sidebarRe.test(rightText));
 
   if (hasSidebarSplit) {
-    const primaryFirst = mainContentScore(leftText) >= mainContentScore(rightText)
-      ? [leftText, rightText]
-      : [rightText, leftText];
+    const [primaryLines, secondaryLines] = mainContentScore(leftText) >= mainContentScore(rightText)
+      ? [leftLines, rightLines]
+      : [rightLines, leftLines];
 
-    return primaryFirst.filter(Boolean).join('\n');
+    const metadataLines: StructuredLine[] = [];
+    const sidebarLines: StructuredLine[] = [];
+    let insideSidebar = false;
+
+    for (const line of secondaryLines) {
+      const normalized = normalizeStructuredText(line.text);
+      if (!normalized) continue;
+
+      if (sidebarRe.test(normalized)) {
+        insideSidebar = true;
+        sidebarLines.push(line);
+        continue;
+      }
+
+      const looksLikeMainMetadata = /^(?:WORK|EXPERIENCE|WORK\s*EXPERIENCE|WORK\s*HISTORY|EMPLOYMENT)$/i.test(normalized)
+        || CURRENTLY_WORKING_RE.test(normalized)
+        || DATE_RANGE_RE.test(normalized)
+        || DURATION_RE.test(normalized)
+        || /^\d{4}\s*(?:to|-|–|—)\s*(?:\d{4}|present|current|now)$/i.test(normalized)
+        || /^(?:\d+(?:\.\d+)?(?:\s+years?(?:\s+of)?|\s+months?)?|years?(?:\s+of)?|months?|month|experience)$/i.test(normalized)
+        || line.x >= midX * 0.55;
+
+      if (looksLikeMainMetadata) {
+        metadataLines.push(line);
+        continue;
+      }
+
+      if (insideSidebar) {
+        sidebarLines.push(line);
+        continue;
+      }
+
+      metadataLines.push(line);
+    }
+
+    const sortLines = (a: StructuredLine, b: StructuredLine) => b.y - a.y || a.x - b.x;
+
+    return [
+      linesToText([...primaryLines, ...metadataLines].sort(sortLines)),
+      linesToText([...sidebarLines].sort(sortLines)),
+    ].filter(Boolean).join('\n');
   }
 
-  return buildStructuredText(items);
+  return linesToText(lines);
 }
 
 export async function extractTextFromPDF(file: File): Promise<string> {
@@ -150,11 +216,44 @@ function looksLikeExperienceContinuation(text: string): boolean {
   const normalized = text.trim();
   if (!normalized) return false;
 
-  const bulletCount = (normalized.match(/(^|\n)[•\-*►▪]/g) || []).length;
+  const bulletCount = (normalized.match(BULLET_LINE_RE) || []).length;
   const hasDateInfo = DATE_RANGE_RE.test(normalized) || DURATION_RE.test(normalized) || CURRENTLY_WORKING_RE.test(normalized);
   const hasRoleKeyword = /\b(?:developer|engineer|designer|manager|internship|intern|executive|lead|specialist)\b/i.test(normalized);
 
   return bulletCount >= 2 && hasDateInfo && hasRoleKeyword;
+}
+
+function looksLikeExperienceEntryStart(line: string): boolean {
+  const normalized = normalizeLine(line);
+  if (!normalized || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
+
+  if (normalized.includes('|')) return true;
+
+  return /\b(?:developer|engineer|designer|manager|internship|intern|executive|lead|specialist)\b/i.test(normalized)
+    && /\b(?:ltd|pvt|labs?|technology|digital|global|solutions?|company|studio)\b/i.test(normalized);
+}
+
+function moveHeaderExperienceBlock(result: Record<string, string>) {
+  const header = result.header;
+  if (!header) return;
+
+  const lines = header.split('\n').map(line => line.trim()).filter(Boolean);
+  if (lines.length < 4) return;
+
+  const experienceStartIndex = lines.findIndex((line, index) => index >= 2 && (
+    looksLikeExperienceEntryStart(line)
+    || CURRENTLY_WORKING_RE.test(normalizeLine(line))
+    || Boolean(extractDateInfo(line))
+  ));
+
+  if (experienceStartIndex <= 0) return;
+
+  const preservedHeader = lines.slice(0, experienceStartIndex).join('\n').trim();
+  const recoveredExperience = lines.slice(experienceStartIndex).join('\n').trim();
+  if (!recoveredExperience) return;
+
+  result.header = preservedHeader;
+  result.experience = [recoveredExperience, result.experience].filter(Boolean).join('\n').trim();
 }
 
 function moveContinuationBlock(
@@ -173,8 +272,14 @@ function moveContinuationBlock(
   const movedBlocks: string[] = [];
 
   blocks.forEach((block, index) => {
-    if (index > 0 && predicate(block)) {
-      movedBlocks.push(block);
+    const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
+    const nextSectionIndex = lines.findIndex((line, lineIndex) => lineIndex > 0 && isKnownSectionHeader(line));
+    const candidate = (nextSectionIndex === -1 ? lines : lines.slice(0, nextSectionIndex)).join('\n').trim();
+    const remainder = (nextSectionIndex === -1 ? [] : lines.slice(nextSectionIndex)).join('\n').trim();
+
+    if (index > 0 && predicate(candidate)) {
+      movedBlocks.push(candidate);
+      if (remainder) keptBlocks.push(remainder);
       return;
     }
 
@@ -224,6 +329,7 @@ function splitSections(text: string): Record<string, string> {
   }
 
   moveContinuationBlock(result, 'skills', 'experience', looksLikeExperienceContinuation);
+  moveHeaderExperienceBlock(result);
 
   return result;
 }
@@ -309,6 +415,20 @@ function cleanExperienceLine(line: string): string {
     .replace(CURRENTLY_WORKING_RE, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
+}
+
+function looksLikeCompanyName(value: string): boolean {
+  return /\b(?:ltd|pvt|labs?|technology|digital|global|solutions?|company|studio|agency)\b/i.test(value)
+    && !value.includes('|');
+}
+
+function looksLikeRoleContinuation(value: string): boolean {
+  const normalized = normalizeLine(value);
+  if (!normalized || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
+  if (looksLikeCompanyName(normalized)) return false;
+  if (Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
+  return normalized.length < 100
+    && (normalized.includes('|') || /\b(?:developer|engineer|designer|manager|internship|intern|executive|lead|specialist|wordpress|frontend|backend|cms)\b/i.test(normalized));
 }
 
 function applyDateInfo(target: Partial<WorkExperience>, dateInfo?: Partial<ExperienceDateInfo> | null) {
@@ -410,6 +530,11 @@ function parseExperience(text: string): WorkExperience[] {
 
     const pipeParts = line.split('|').map(part => part.trim()).filter(Boolean);
     if (pipeParts.length >= 2 && !isBullet) {
+      if (current && current.role && !(current.bullets?.length) && !looksLikeCompanyName(pipeParts[0])) {
+        current.role = [current.role, line].filter(Boolean).join(' | ').replace(/\s*\|\s*/g, ' | ').trim();
+        continue;
+      }
+
       startEntry(pipeParts[0], pipeParts.slice(1).join(' | '));
       continue;
     }
@@ -420,8 +545,13 @@ function parseExperience(text: string): WorkExperience[] {
       continue;
     }
 
+    if (current && current.role && !(current.bullets?.length) && looksLikeRoleContinuation(rawLine)) {
+      current.role = [current.role, line].filter(Boolean).join(' ').replace(/\s{2,}/g, ' ').trim();
+      continue;
+    }
+
     if (isBullet && current) {
-      const cleanBullet = line.replace(/^[•\-–—*►▪]\s*/, '').replace(/^\d+\.\s*/, '').trim();
+      const cleanBullet = line.replace(BULLET_PREFIX_RE, '').replace(/^\d+\.\s*/, '').trim();
       if (cleanBullet) current.bullets = [...(current.bullets || []), cleanBullet];
       continue;
     }
@@ -466,8 +596,8 @@ function parseEducation(text: string): Education[] {
   };
 
   for (const rawLine of lines) {
-    const isBullet = /^[•\-–—►▪]\s/.test(rawLine) || /^\d+\.\s/.test(rawLine);
-    const cleanLine = normalizeLine(rawLine.replace(/^[•\-–—►▪]\s*/, '').replace(/^\d+\.\s*/, ''));
+    const isBullet = /^[•\-–—►▪]\s/.test(rawLine) || /^\d+\.\s/.test(rawLine);
+    const cleanLine = normalizeLine(rawLine.replace(/^[•\-–—►▪]\s*/, '').replace(/^\d+\.\s*/, ''));
     
     if (!cleanLine || PAGE_MARKER_RE.test(cleanLine) || isKnownSectionHeader(cleanLine)) continue;
 
@@ -534,11 +664,14 @@ function parseSkills(text: string): Skill[] {
   const cleaned = text.replace(/\[[\]|\s]+\]/g, '');
   const seen = new Set<string>();
   const items = cleaned
-    .split(/\n|,|;|•|·/)
+    .split(/\n|,|;|•|·|/)
     .map(s => normalizeLine(s))
     .filter(s => s.length > 1 && s.length < 40 && !isKnownSectionHeader(s) && !PAGE_MARKER_RE.test(s))
     .filter(s => !DATE_RANGE_RE.test(s) && !DURATION_RE.test(s) && !CURRENTLY_WORKING_RE.test(s))
     .filter(s => !/(https?:\/\/|www\.|linkedin\.com)/i.test(s))
+    .filter(s => !looksLikeExperienceEntryStart(s))
+    .filter(s => !looksLikeCompanyName(s))
+    .filter(s => !/\b(?:developer|engineer|designer|manager|internship|intern|executive|lead|specialist)\b/i.test(s))
     .filter(s => {
       const key = s.toLowerCase();
       if (seen.has(key)) return false;

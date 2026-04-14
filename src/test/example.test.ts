@@ -202,4 +202,111 @@ https://gigidev.clickysoft.us/`);
       expect.objectContaining({ name: 'gigidev.clickysoft.us', url: 'https://gigidev.clickysoft.us/' }),
     ]);
   });
+
+  it('recovers experience entries when PDF extraction puts page-one jobs before WORK and page-two jobs inside skills', () => {
+    const parsed = parseResumeText(`Abdullah Naseem
+abdullah.dev1997@gmail.com
+Al Rehman Technology | CMS Developer
+Customized WooCommerce plugin for enhanced functionality and user experience.
+Proficient Digital | Senior Frontend
+Developer | CMS Developer
+Create a custom theme from scratch
+Digitonics Labs | Jr. Executive Web Developer
+Working on custom theme (scratch theme)
++92 324 8204797
++92 300 2173869
+WORK
+Currently Work
+2.5 Years of
+Experience
+2020 to 2023
+SKILLS
+Wordpress
+HTML
+CSS
+Customization
+Javascript
+Bootstrap
+6
+JQuery
+Months
+Experience
+PHP
+2019 to 2020
+---PAGE_BREAK---
+Just Digital Pvt Ltd
+Jr. Wordpress Developer
+4
+Months
+Experience
+2019 to 2020
+ Design a Creative and Professional website
+ Theme Customization
+PNT Global
+Internship Wordpress Developer
+6
+Month
+Experience
+2018 to 2019
+ Build websites using WordPress.
+ Provide technical support to clients.
+EDUCATION
+Bachelors in Commerce
+From Premiere Govt. College
+PORTFOLIO
+https://bridesforacause.com/
+https://slcexcavating.com/
+https://innerpeaceart.com/
+https://gigidev.clickysoft.us/`);
+
+    expect(parsed.experience).toHaveLength(5);
+    expect(parsed.experience?.[0]).toMatchObject({
+      company: 'Al Rehman Technology',
+      role: 'CMS Developer',
+      endDate: 'Present',
+      current: true,
+    });
+    expect(parsed.experience?.[1]).toMatchObject({
+      company: 'Proficient Digital',
+      role: 'Senior Frontend | Developer | CMS Developer',
+      startDate: '2020',
+      endDate: '2023',
+    });
+    expect(parsed.experience?.[2]).toMatchObject({
+      company: 'Digitonics Labs',
+      role: 'Jr. Executive Web Developer',
+      startDate: '2019',
+      endDate: '2020',
+    });
+    expect(parsed.experience?.[3]).toMatchObject({
+      company: 'Just Digital Pvt Ltd',
+      role: 'Jr. Wordpress Developer',
+      startDate: '2019',
+      endDate: '2020',
+    });
+    expect(parsed.experience?.[4]).toMatchObject({
+      company: 'PNT Global',
+      role: 'Internship Wordpress Developer',
+      startDate: '2018',
+      endDate: '2019',
+    });
+
+    expect(parsed.skills?.map(skill => skill.name)).toEqual([
+      'Wordpress',
+      'HTML',
+      'CSS',
+      'Customization',
+      'Javascript',
+      'Bootstrap',
+      'JQuery',
+      'PHP',
+    ]);
+
+    expect(parsed.projects).toEqual([
+      expect.objectContaining({ name: 'bridesforacause.com', url: 'https://bridesforacause.com/' }),
+      expect.objectContaining({ name: 'slcexcavating.com', url: 'https://slcexcavating.com/' }),
+      expect.objectContaining({ name: 'innerpeaceart.com', url: 'https://innerpeaceart.com/' }),
+      expect.objectContaining({ name: 'gigidev.clickysoft.us', url: 'https://gigidev.clickysoft.us/' }),
+    ]);
+  });
 });
