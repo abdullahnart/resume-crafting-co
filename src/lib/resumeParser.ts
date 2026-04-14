@@ -443,6 +443,73 @@ function looksLikeCompanyName(value: string): boolean {
     && !value.includes('|');
 }
 
+function expandExperienceLines(text: string): string[] {
+  return text
+    .split('\n')
+    .flatMap(rawLine => {
+      const trimmed = rawLine.trim();
+      if (!trimmed) return [];
+
+      const inlineBulletMatch = trimmed.match(/^(.*?)([•►▪].+)$/);
+      if (inlineBulletMatch && inlineBulletMatch[1].trim()) {
+        return [inlineBulletMatch[1].trim(), inlineBulletMatch[2].trim()];
+      }
+
+      return [trimmed];
+    });
+}
+
+function looksLikeStandaloneCompanyLine(value: string): boolean {
+  const normalized = normalizeLine(value);
+  if (!normalized || normalized.includes('|') || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
+  if (Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
+  if (/[.!?]$/.test(normalized)) return false;
+  if (/^(?:build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating|optimi(?:s|z)ed?|implement(?:ed)?|manage(?:d)?)\b/i.test(normalized)) return false;
+
+  const words = normalized.split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 7) return false;
+
+  return looksLikeCompanyName(normalized);
+}
+
+function looksLikeRoleLine(value: string): boolean {
+  const normalized = normalizeLine(value);
+  if (!normalized || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
+  if (Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
+  if (looksLikeStandaloneCompanyLine(normalized) || looksLikeCompanyName(normalized)) return false;
+
+  return /\b(?:developer|engineer|designer|manager|internship|intern|executive|lead|specialist|wordpress|frontend|backend|cms|shopify|webflow|elementor)\b/i.test(normalized);
+}
+
+function looksLikeRoleTail(value: string): boolean {
+  const normalized = normalizeLine(value);
+  return /^(?:web\s+developer|wordpress\s+developer|developer|engineer|designer|manager|specialist)$/i.test(normalized);
+}
+
+function cleanExperienceBullet(value: string): string {
+  return normalizeLine(value)
+    .replace(/^here\b\s*/i, '')
+    .replace(/^(?:months?|month|years?|experience)\b\s*/i, '')
+    .replace(DURATION_RE, '')
+    .replace(DATE_RANGE_RE, '')
+    .replace(CURRENTLY_WORKING_RE, '')
+    .replace(BULLET_PREFIX_RE, '')
+    .replace(/^\d+\.\s*/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function looksLikeAchievementLine(value: string): boolean {
+  const normalized = cleanExperienceBullet(value);
+  if (!normalized || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
+  if (Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
+  if (looksLikeStandaloneCompanyLine(normalized) || looksLikeCompanyName(normalized) || looksLikeRoleLine(normalized)) return false;
+  if (normalized.length < 3 || normalized.length > 220) return false;
+
+  return /^(?:advanced|more\s+expertise|theme\s+and\s+plugin\s+customization|wordpress\s+custom\s+functionality|paypal|stripe|expert\s+in|create|created|build|built|custom(?:ize|ized)|develop|developed|design|designed|working|worked|provide|provided|prepare|prepared|write|wrote|coordinate|coordinating|optimi(?:s|z)e(?:d)?|implement|implemented|manage|managed|lead|led|convert|converted)\b/i.test(normalized)
+    || /[.!?]$/.test(normalized);
+}
+
 function looksLikeRoleContinuation(value: string): boolean {
   const normalized = normalizeLine(value);
   if (!normalized || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
@@ -481,7 +548,7 @@ function applyDateInfo(target: Partial<WorkExperience>, dateInfo?: Partial<Exper
 
 function parseExperience(text: string): WorkExperience[] {
   if (!text) return [];
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const lines = expandExperienceLines(text);
   
   const entries: WorkExperience[] = [];
   let current: Partial<WorkExperience> | null = null;
@@ -533,6 +600,26 @@ function parseExperience(text: string): WorkExperience[] {
     }
   };
 
+  const appendBullet = (value: string) => {
+    if (!current) return;
+
+    const cleanBullet = cleanExperienceBullet(value);
+    if (!cleanBullet) return;
+
+    const existingBullets = [...(current.bullets || [])];
+    const shouldMergeWithPrevious = existingBullets.length > 0
+      && /^[a-z]/.test(cleanBullet)
+      && !/^(?:create|created|build|built|custom(?:ize|ized)|develop|developed|design|designed|working|worked|provide|provided|prepare|prepared|write|wrote|coordinate|coordinating|optimi(?:s|z)e(?:d)?|implement|implemented|manage|managed|lead|led|advanced|more\s+expertise|theme\s+and\s+plugin\s+customization|wordpress\s+custom\s+functionality|paypal|stripe|expert\s+in)\b/i.test(cleanBullet);
+
+    if (shouldMergeWithPrevious) {
+      existingBullets[existingBullets.length - 1] = `${existingBullets[existingBullets.length - 1]} ${cleanBullet}`.replace(/\s{2,}/g, ' ').trim();
+      current.bullets = existingBullets;
+      return;
+    }
+
+    current.bullets = [...existingBullets, cleanBullet];
+  };
+
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i];
     const line = normalizeLine(rawLine);
@@ -569,10 +656,34 @@ function parseExperience(text: string): WorkExperience[] {
       }
     }
 
+    const combinedEntry = splitCombinedCompanyRole(line);
+    if (!isBullet && combinedEntry) {
+      startEntry(combinedEntry.company, combinedEntry.role);
+      continue;
+    }
+
+    if (!isBullet && looksLikeStandaloneCompanyLine(line)) {
+      if (looksLikeRoleLine(nextLine)) {
+        startEntry(line, nextLine);
+        i++;
+        continue;
+      }
+    }
+
     const pipeParts = line.split('|').map(part => part.trim()).filter(Boolean);
     if (pipeParts.length >= 2 && !isBullet) {
       if (current && current.role && !(current.bullets?.length) && !looksLikeCompanyName(pipeParts[0])) {
-        current.role = [current.role, line].filter(Boolean).join(' | ').replace(/\s*\|\s*/g, ' | ').trim();
+        if (looksLikeRoleTail(pipeParts[0])) {
+          const roleParts = current.role.split('|').map(part => part.trim()).filter(Boolean);
+          const lastRolePart = roleParts.pop() || '';
+          current.role = [
+            ...roleParts,
+            [lastRolePart, pipeParts[0]].filter(Boolean).join(' ').trim(),
+            ...pipeParts.slice(1),
+          ].filter(Boolean).join(' | ').replace(/\s{2,}/g, ' ').trim();
+        } else {
+          current.role = [current.role, line].filter(Boolean).join(' | ').replace(/\s*\|\s*/g, ' | ').trim();
+        }
         continue;
       }
 
@@ -592,8 +703,12 @@ function parseExperience(text: string): WorkExperience[] {
     }
 
     if (isBullet && current) {
-      const cleanBullet = line.replace(BULLET_PREFIX_RE, '').replace(/^\d+\.\s*/, '').trim();
-      if (cleanBullet) current.bullets = [...(current.bullets || []), cleanBullet];
+      appendBullet(rawLine);
+      continue;
+    }
+
+    if (current && current.role && looksLikeAchievementLine(rawLine)) {
+      appendBullet(rawLine);
       continue;
     }
 
@@ -603,12 +718,7 @@ function parseExperience(text: string): WorkExperience[] {
     }
 
     if (!isBullet && line.length < 100 && !current) {
-      const combinedEntry = splitCombinedCompanyRole(line);
-      if (combinedEntry) {
-        startEntry(combinedEntry.company, combinedEntry.role);
-      } else {
-        startEntry(line);
-      }
+      startEntry(line);
     }
   }
 
