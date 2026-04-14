@@ -469,11 +469,7 @@ function looksLikeStandaloneCompanyLine(value: string): boolean {
   const words = normalized.split(/\s+/).filter(Boolean);
   if (words.length < 2 || words.length > 7) return false;
 
-  const roleKeywordRe = /\b(?:developer|engineer|designer|manager|internship|intern|executive|lead|specialist|wordpress|frontend|backend|cms)\b/i;
-  const capitalizedWords = words.filter(word => /^[A-Z][\w.&'-]*$/.test(word)).length;
-  const titleCaseRatio = capitalizedWords / words.length;
-
-  return looksLikeCompanyName(normalized) || (titleCaseRatio >= 0.6 && !roleKeywordRe.test(normalized));
+  return looksLikeCompanyName(normalized);
 }
 
 function looksLikeRoleLine(value: string): boolean {
@@ -672,9 +668,6 @@ function parseExperience(text: string): WorkExperience[] {
         i++;
         continue;
       }
-
-      startEntry(line);
-      continue;
     }
 
     const pipeParts = line.split('|').map(part => part.trim()).filter(Boolean);
