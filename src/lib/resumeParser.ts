@@ -20,6 +20,7 @@ type ExperienceDateInfo = Pick<WorkExperience, 'startDate' | 'endDate' | 'curren
 
 const STRUCTURED_LINE_Y_TOLERANCE = 3;
 const STRUCTURED_LINE_X_GAP_THRESHOLD = 12;
+const STRUCTURED_LINE_SEGMENT_GAP_THRESHOLD = 72;
 const BULLET_LINE_RE = /(^|\n)\s*[•\-–—*►▪]/g;
 const BULLET_PREFIX_RE = /^[•\-–—*►▪]\s*/;
 
@@ -40,29 +41,49 @@ function buildStructuredLines(pageItems: PositionedTextItem[]): StructuredLine[]
 
   return Array.from(lineMap.entries())
     .sort((a, b) => b[0] - a[0])
-    .map(([y, lineItems]) => {
+    .flatMap(([y, lineItems]) => {
       lineItems.sort((a, b) => a.x - b.x);
 
-      let text = '';
-      for (let i = 0; i < lineItems.length; i++) {
-        if (i > 0 && lineItems[i].x - (lineItems[i - 1].x + lineItems[i - 1].width) > STRUCTURED_LINE_X_GAP_THRESHOLD) {
-          text += '  ';
-        } else if (i > 0) {
-          text += ' ';
+      const segments: Array<Array<{ str: string; x: number; width: number }>> = [];
+      let currentSegment: Array<{ str: string; x: number; width: number }> = [];
+
+      lineItems.forEach((item, index) => {
+        const previous = lineItems[index - 1];
+        const gap = previous ? item.x - (previous.x + previous.width) : 0;
+
+        if (currentSegment.length && gap > STRUCTURED_LINE_SEGMENT_GAP_THRESHOLD) {
+          segments.push(currentSegment);
+          currentSegment = [];
         }
 
-        text += lineItems[i].str;
-      }
+        currentSegment.push(item);
+      });
 
-      const minX = Math.min(...lineItems.map(item => item.x));
-      const maxX = Math.max(...lineItems.map(item => item.x + item.width));
+      if (currentSegment.length) segments.push(currentSegment);
 
-      return {
-        text: normalizeStructuredText(text),
-        x: minX,
-        y,
-        width: maxX - minX,
-      };
+      return segments.map(segment => {
+        let text = '';
+
+        for (let i = 0; i < segment.length; i++) {
+          if (i > 0 && segment[i].x - (segment[i - 1].x + segment[i - 1].width) > STRUCTURED_LINE_X_GAP_THRESHOLD) {
+            text += '  ';
+          } else if (i > 0) {
+            text += ' ';
+          }
+
+          text += segment[i].str;
+        }
+
+        const minX = Math.min(...segment.map(item => item.x));
+        const maxX = Math.max(...segment.map(item => item.x + item.width));
+
+        return {
+          text: normalizeStructuredText(text),
+          x: minX,
+          y,
+          width: maxX - minX,
+        };
+      });
     })
     .filter(line => line.text);
 }
@@ -427,8 +448,28 @@ function looksLikeRoleContinuation(value: string): boolean {
   if (!normalized || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
   if (looksLikeCompanyName(normalized)) return false;
   if (Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
+  if (/[.!?]$/.test(normalized)) return false;
+  if (/^(?:build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating)\b/i.test(normalized)) return false;
   return normalized.length < 100
     && (normalized.includes('|') || /\b(?:developer|engineer|designer|manager|internship|intern|executive|lead|specialist|wordpress|frontend|backend|cms)\b/i.test(normalized));
+}
+
+function splitCombinedCompanyRole(value: string): { company: string; role: string } | null {
+  const normalized = normalizeLine(value);
+  if (!normalized || normalized.includes('|')) return null;
+  if (!/^[A-Z]/.test(normalized)) return null;
+  if (/^(?:build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating)\b/i.test(normalized)) return null;
+
+  const roleMatch = normalized.match(/\b(?:Internship|Intern|Jr\.?|Junior|Sr\.?|Senior|Lead|Executive|Frontend|Backend|Full\s*Stack|CMS|Wordpress|Developer|Engineer|Designer|Manager|Specialist)\b/i);
+  if (!roleMatch || roleMatch.index === undefined || roleMatch.index <= 0) return null;
+
+  const company = normalized.slice(0, roleMatch.index).trim();
+  const role = normalized.slice(roleMatch.index).trim();
+
+  if (!company || !role) return null;
+  if (company.split(/\s+/).length < 2) return null;
+
+  return { company, role };
 }
 
 function applyDateInfo(target: Partial<WorkExperience>, dateInfo?: Partial<ExperienceDateInfo> | null) {
@@ -545,7 +586,7 @@ function parseExperience(text: string): WorkExperience[] {
       continue;
     }
 
-    if (current && current.role && !(current.bullets?.length) && looksLikeRoleContinuation(rawLine)) {
+    if (current && current.role && !(current.bullets?.length) && !isBullet && looksLikeRoleContinuation(rawLine)) {
       current.role = [current.role, line].filter(Boolean).join(' ').replace(/\s{2,}/g, ' ').trim();
       continue;
     }
@@ -562,7 +603,12 @@ function parseExperience(text: string): WorkExperience[] {
     }
 
     if (!isBullet && line.length < 100 && !current) {
-      startEntry(line);
+      const combinedEntry = splitCombinedCompanyRole(line);
+      if (combinedEntry) {
+        startEntry(combinedEntry.company, combinedEntry.role);
+      } else {
+        startEntry(line);
+      }
     }
   }
 
