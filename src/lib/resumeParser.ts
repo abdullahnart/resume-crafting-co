@@ -17,6 +17,10 @@ type StructuredLine = {
 };
 
 type ExperienceDateInfo = Pick<WorkExperience, 'startDate' | 'endDate' | 'current'>;
+type ExperienceBlock = {
+  prelude: string[];
+  lines: string[];
+};
 
 const STRUCTURED_LINE_Y_TOLERANCE = 3;
 const STRUCTURED_LINE_X_GAP_THRESHOLD = 12;
@@ -579,188 +583,229 @@ function applyDateInfo(target: Partial<WorkExperience>, dateInfo?: Partial<Exper
   if (typeof dateInfo.current === 'boolean') target.current = dateInfo.current;
 }
 
-function parseExperience(text: string): WorkExperience[] {
-  if (!text) return [];
+function getExperienceHeaderConsumption(rawLine: string, nextRawLine: string): 0 | 1 | 2 {
+  const line = normalizeLine(rawLine);
+  const nextLine = normalizeLine(nextRawLine);
+  const isBullet = /^[•\-–—*►▪]\s/.test(rawLine) || /^\d+\.\s/.test(rawLine);
+
+  if (isBullet || !line || PAGE_MARKER_RE.test(line) || isKnownSectionHeader(line)) return 0;
+  if (splitCombinedCompanyRole(line)) return 1;
+
+  const pipeParts = line.split('|').map(part => part.trim()).filter(Boolean);
+  if (pipeParts.length >= 2) return 1;
+  if (looksLikeStandaloneCompanyLine(line) && looksLikeRoleLine(nextLine)) return 2;
+  if (looksLikeStandaloneCompanyLine(line)) return 1;
+
+  return 0;
+}
+
+function buildExperienceBlocks(text: string): ExperienceBlock[] {
   const lines = expandExperienceLines(text);
-  
-  const entries: WorkExperience[] = [];
-  let current: Partial<WorkExperience> | null = null;
-  let pendingDateInfo: Partial<ExperienceDateInfo> | null = null;
-  let pendingCurrentEntry = false;
+  const blocks: ExperienceBlock[] = [];
+  let currentPrelude: string[] = [];
+  let currentBlock: string[] = [];
+  let trailingMetadata: string[] = [];
 
-  const flushCurrent = () => {
-    if (current && (current.company || current.role)) {
-      entries.push({
-        id: uid(),
-        company: current.company || '',
-        role: current.role || '',
-        startDate: current.startDate || '',
-        endDate: current.endDate || '',
-        current: current.current || false,
-        bullets: current.bullets || [],
-      });
-    }
-     current = null;
-  };
-
-  const isStubEntry = () => Boolean(current?.company && !current.role && !(current.bullets?.length));
-
-  const startEntry = (company: string, role = '') => {
-    if (isStubEntry()) {
-      current = {
-        ...current,
-        company: normalizeLine(company),
-        role: normalizeLine(role),
-      };
-    } else {
-      flushCurrent();
-      current = {
-        company: normalizeLine(company),
-        role: normalizeLine(role),
-        startDate: '',
-        endDate: '',
-        current: false,
-        bullets: [],
-      };
+  const flushCurrentBlock = () => {
+    if (!currentBlock.length) return;
+    if (trailingMetadata.length) {
+      currentBlock.push(...trailingMetadata);
+      trailingMetadata = [];
     }
 
-    if (pendingCurrentEntry) {
-      applyDateInfo(current, { endDate: 'Present', current: true });
-      pendingCurrentEntry = false;
-    } else if (pendingDateInfo) {
-      applyDateInfo(current, pendingDateInfo);
-      pendingDateInfo = null;
-    }
-  };
+    blocks.push({
+      prelude: currentPrelude,
+      lines: currentBlock,
+    });
 
-  const appendBullet = (value: string) => {
-    if (!current) return;
-
-    const cleanBullet = extractAchievementCandidate(value);
-    if (!cleanBullet) return;
-
-    const existingBullets = [...(current.bullets || [])];
-    const shouldMergeWithPrevious = existingBullets.length > 0
-      && /^[a-z]/.test(cleanBullet)
-      && !/^(?:create|created|build|built|custom(?:ize|ized)|develop|developed|design|designed|working|worked|provide|provided|prepare|prepared|write|wrote|coordinate|coordinating|optimi(?:s|z)e(?:d)?|implement|implemented|manage|managed|lead|led|advanced|more\s+expertise|theme\s+and\s+plugin\s+customization|wordpress\s+custom\s+functionality|paypal|stripe|expert\s+in)\b/i.test(cleanBullet);
-
-    if (shouldMergeWithPrevious) {
-      existingBullets[existingBullets.length - 1] = `${existingBullets[existingBullets.length - 1]} ${cleanBullet}`.replace(/\s{2,}/g, ' ').trim();
-      current.bullets = existingBullets;
-      return;
-    }
-
-    current.bullets = [...existingBullets, cleanBullet];
+    currentPrelude = [];
+    currentBlock = [];
   };
 
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i];
     const line = normalizeLine(rawLine);
     const nextRawLine = lines[i + 1] || '';
-    const nextLine = normalizeLine(nextRawLine);
-    const isBullet = /^[•\-–—*►▪]\s/.test(rawLine) || /^\d+\.\s/.test(rawLine);
-    const isHr = /^-{3,}$/.test(rawLine) || /^_{3,}$/.test(rawLine) || rawLine === '---PAGE_BREAK---';
-    const isBoldLine = rawLine.startsWith('**') && rawLine.endsWith('**');
-    const isNextBoldLine = nextRawLine.startsWith('**') && nextRawLine.endsWith('**');
 
-    if (isHr || PAGE_MARKER_RE.test(line) || isKnownSectionHeader(line)) continue;
+    if (!line || PAGE_MARKER_RE.test(line) || isKnownSectionHeader(line)) continue;
 
-    if (pendingCurrentEntry && /^here$/i.test(line)) continue;
-
-    if (CURRENTLY_WORKING_RE.test(line)) {
-      if (current) {
-        applyDateInfo(current, { endDate: 'Present', current: true });
-      } else {
-        pendingCurrentEntry = true;
-      }
-      continue;
-    }
-
-    const dateInfo = extractDateInfo(line);
-    if (dateInfo) {
-      if (current && (current.company || current.role) && !current.startDate && !current.endDate) {
-        applyDateInfo(current, dateInfo);
-      } else {
-        pendingDateInfo = { ...(pendingDateInfo || {}), ...dateInfo };
+    const headerConsumption = getExperienceHeaderConsumption(rawLine, nextRawLine);
+    if (headerConsumption) {
+      if (currentBlock.length) {
+        blocks.push({ prelude: currentPrelude, lines: currentBlock });
+        currentPrelude = trailingMetadata;
       }
 
-      if (!cleanExperienceLine(line)) {
-        continue;
-      }
-    }
+      currentBlock = [rawLine];
+      trailingMetadata = [];
 
-    const combinedEntry = splitCombinedCompanyRole(line);
-    if (!isBullet && combinedEntry) {
-      startEntry(combinedEntry.company, combinedEntry.role);
-      continue;
-    }
-
-    if (!isBullet && looksLikeStandaloneCompanyLine(line)) {
-      if (looksLikeRoleLine(nextLine)) {
-        startEntry(line, nextLine);
+      if (headerConsumption === 2) {
+        currentBlock.push(nextRawLine);
         i++;
+      }
+
+      continue;
+    }
+
+    const metadataOnly = isBareExperienceMetadata(rawLine);
+
+    if (!currentBlock.length) {
+      if (metadataOnly) currentPrelude.push(rawLine);
+      continue;
+    }
+
+    if (metadataOnly) {
+      trailingMetadata.push(rawLine);
+      continue;
+    }
+
+    if (trailingMetadata.length) {
+      currentBlock.push(...trailingMetadata);
+      trailingMetadata = [];
+    }
+
+    currentBlock.push(rawLine);
+  }
+
+  flushCurrentBlock();
+  return blocks;
+}
+
+function parseExperience(text: string): WorkExperience[] {
+  if (!text) return [];
+  const entries: WorkExperience[] = [];
+  const appendBullet = (target: Partial<WorkExperience>, value: string) => {
+    const cleanBullet = extractAchievementCandidate(value);
+    if (!cleanBullet) return;
+
+    const existingBullets = [...(target.bullets || [])];
+    const shouldMergeWithPrevious = existingBullets.length > 0
+      && /^[a-z]/.test(cleanBullet)
+      && !/^(?:create|created|build|built|custom(?:ize|ized)|develop|developed|design|designed|working|worked|provide|provided|prepare|prepared|write|wrote|coordinate|coordinating|optimi(?:s|z)e(?:d)?|implement|implemented|manage|managed|lead|led|advanced|more\s+expertise|theme\s+and\s+plugin\s+customization|wordpress\s+custom\s+functionality|paypal|stripe|expert\s+in)\b/i.test(cleanBullet);
+
+    if (shouldMergeWithPrevious) {
+      existingBullets[existingBullets.length - 1] = `${existingBullets[existingBullets.length - 1]} ${cleanBullet}`.replace(/\s{2,}/g, ' ').trim();
+      target.bullets = existingBullets;
+      return;
+    }
+
+    target.bullets = [...existingBullets, cleanBullet];
+  };
+
+  const blocks = buildExperienceBlocks(text);
+
+  for (const block of blocks) {
+    const entry: Partial<WorkExperience> = {
+      company: '',
+      role: '',
+      startDate: '',
+      endDate: '',
+      current: false,
+      bullets: [],
+    };
+
+    const blockLines = [...block.lines];
+    let lineIndex = 0;
+    const firstLine = normalizeLine(blockLines[0] || '');
+    const secondLine = normalizeLine(blockLines[1] || '');
+    const firstCombinedEntry = splitCombinedCompanyRole(firstLine);
+    const firstPipeParts = firstLine.split('|').map(part => part.trim()).filter(Boolean);
+
+    if (firstCombinedEntry) {
+      entry.company = firstCombinedEntry.company;
+      entry.role = firstCombinedEntry.role;
+      lineIndex = 1;
+    } else if (firstPipeParts.length >= 2) {
+      entry.company = firstPipeParts[0];
+      entry.role = firstPipeParts.slice(1).join(' | ');
+      lineIndex = 1;
+    } else if (looksLikeStandaloneCompanyLine(firstLine)) {
+      entry.company = firstLine;
+      lineIndex = 1;
+
+      if (looksLikeRoleLine(secondLine)) {
+        entry.role = secondLine;
+        lineIndex = 2;
+      }
+    } else {
+      entry.company = firstLine;
+      lineIndex = 1;
+    }
+
+    for (const rawPreludeLine of block.prelude) {
+      const preludeLine = normalizeLine(rawPreludeLine);
+      if (CURRENTLY_WORKING_RE.test(preludeLine)) {
+        applyDateInfo(entry, { endDate: 'Present', current: true });
         continue;
+      }
+
+      const preludeDateInfo = extractDateInfo(preludeLine);
+      if (preludeDateInfo && !entry.startDate && !entry.endDate) {
+        applyDateInfo(entry, preludeDateInfo);
       }
     }
 
-    const pipeParts = line.split('|').map(part => part.trim()).filter(Boolean);
-    if (pipeParts.length >= 2 && !isBullet) {
-      if (current && current.role && !(current.bullets?.length) && !looksLikeCompanyName(pipeParts[0])) {
-        if (looksLikeRoleTail(pipeParts[0])) {
-          const roleParts = current.role.split('|').map(part => part.trim()).filter(Boolean);
-          const lastRolePart = roleParts.pop() || '';
-          current.role = [
-            ...roleParts,
-            [lastRolePart, pipeParts[0]].filter(Boolean).join(' ').trim(),
-            ...pipeParts.slice(1),
-          ].filter(Boolean).join(' | ').replace(/\s{2,}/g, ' ').trim();
-        } else {
-          current.role = [current.role, line].filter(Boolean).join(' | ').replace(/\s*\|\s*/g, ' | ').trim();
+    for (let i = lineIndex; i < blockLines.length; i++) {
+      const rawLine = blockLines[i];
+      const line = normalizeLine(rawLine);
+      const isBullet = /^[•\-–—*►▪]\s/.test(rawLine) || /^\d+\.\s/.test(rawLine);
+
+      if (!line || PAGE_MARKER_RE.test(line) || isKnownSectionHeader(line)) continue;
+
+      if (CURRENTLY_WORKING_RE.test(line)) {
+        applyDateInfo(entry, { endDate: 'Present', current: true });
+        continue;
+      }
+
+      const dateInfo = extractDateInfo(line);
+      if (dateInfo) {
+        if (!entry.startDate && !entry.endDate) {
+          applyDateInfo(entry, dateInfo);
         }
+
+        if (!cleanExperienceLine(line)) continue;
+      }
+
+      if (!entry.role && looksLikeRoleLine(line)) {
+        entry.role = line;
         continue;
       }
 
-      startEntry(pipeParts[0], pipeParts.slice(1).join(' | '));
-      continue;
+      if (entry.role && looksLikeRoleContinuation(rawLine) && !(entry.bullets?.length) && !isBullet) {
+        entry.role = [entry.role, line].filter(Boolean).join(' ').replace(/\s{2,}/g, ' ').trim();
+        continue;
+      }
+
+      if (isBareExperienceMetadata(rawLine)) continue;
+
+      if (isBullet || looksLikeAchievementLine(rawLine)) {
+        appendBullet(entry, rawLine);
+        continue;
+      }
+
+      if (entry.role && !looksLikeStandaloneCompanyLine(line) && !looksLikeCompanyName(line) && !looksLikeRoleLine(line)) {
+        appendBullet(entry, rawLine);
+        continue;
+      }
+
+      if (!entry.role && line.length < 100) {
+        entry.role = line;
+      }
     }
 
-    if (isBoldLine && isNextBoldLine && !isBullet) {
-      startEntry(line, nextLine);
-      i++;
-      continue;
-    }
-
-    if (current && current.role && !(current.bullets?.length) && !isBullet && looksLikeRoleContinuation(rawLine)) {
-      current.role = [current.role, line].filter(Boolean).join(' ').replace(/\s{2,}/g, ' ').trim();
-      continue;
-    }
-
-    if (isBullet && current) {
-      appendBullet(rawLine);
-      continue;
-    }
-
-    if (current && current.role && looksLikeAchievementLine(rawLine)) {
-      appendBullet(rawLine);
-      continue;
-    }
-
-    if (current && current.role && !looksLikeStandaloneCompanyLine(line) && !looksLikeCompanyName(line) && !looksLikeRoleLine(line) && !isBareExperienceMetadata(rawLine)) {
-      appendBullet(rawLine);
-      continue;
-    }
-
-    if (current && !current.role && line.length < 100 && !extractDateInfo(line)) {
-      current.role = line;
-      continue;
-    }
-
-    if (!isBullet && line.length < 100 && !current) {
-      startEntry(line);
+    if (entry.company || entry.role) {
+      entries.push({
+        id: uid(),
+        company: entry.company || '',
+        role: entry.role || '',
+        startDate: entry.startDate || '',
+        endDate: entry.endDate || '',
+        current: entry.current || false,
+        bullets: entry.bullets || [],
+      });
     }
   }
 
-  flushCurrent();
   return entries;
 }
 
