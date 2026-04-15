@@ -395,6 +395,7 @@ function parsePersonalInfo(header: string, addressSection?: string) {
 
 const DURATION_RE = /(\d+(?:\.\d+)?\s*(?:months?|years?)\s*(?:of\s*)?experience|\d+(?:\.\d+)?\s*months?\s*experience)/i;
 const JOB_TITLE_RE = /\b(?:developer|engineer|designer|manager|internship|intern|executive|lead|specialist)\b/i;
+const ROLE_HINT_RE = /\b(?:jr\.?|sr\.?|junior|senior|lead|principal|staff|assistant|associate|internship|intern|frontend|front\s*end|backend|back\s*end|full\s*stack|cms|wordpress|web|software|product|project|qa|ui|ux)\b/i;
 const ACHIEVEMENT_START_RE = /^(?:advanced|more\s+expertise|theme\s+and\s+plugin\s+customization|wordpress\s+custom\s+functionality|website\s+speed\s+optimization|custom\s+theme\s+development|design\s+email\s+template|psd\s+to\s+wordpress|theme\s+customization|paypal|stripe|expert\s+in|create|created|build|built|custom(?:ize|ized)|develop|developed|design|designed|working|worked|provide|provided|prepare|prepared|write|wrote|coordinate|coordinating|optimi(?:s|z)e(?:d)?|implement|implemented|manage|managed|lead|led)\b/i;
 const DATE_TOKEN = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s*\\d{4}|\\d{1,2}[/-]\\d{4}|\\d{4}|present|current|now';
 const DATE_RANGE_RE = new RegExp(`(${DATE_TOKEN})\\s*(?:to|-|–|—)\\s*(${DATE_TOKEN})`, 'i');
@@ -461,6 +462,15 @@ function looksLikeCompanyName(value: string): boolean {
     && !value.includes('|');
 }
 
+function looksLikeRoleLabel(value: string): boolean {
+  const normalized = normalizeLine(value);
+  if (!normalized) return false;
+
+  return JOB_TITLE_RE.test(normalized)
+    || ROLE_HINT_RE.test(normalized)
+    || /\b(?:developer|engineer|designer|manager|specialist|executive|internship|intern|consultant|architect|analyst|coordinator)\b$/i.test(normalized);
+}
+
 function expandExperienceLines(text: string): string[] {
   return text
     .split('\n')
@@ -486,6 +496,7 @@ function looksLikeStandaloneCompanyLine(value: string): boolean {
 
   const words = normalized.split(/\s+/).filter(Boolean);
   if (words.length < 2 || words.length > 7) return false;
+  if (looksLikeRoleLabel(normalized) && !looksLikeCompanyName(normalized)) return false;
 
   return looksLikeCompanyName(normalized) || /^[A-Z][\w&.-]*(?:\s+[A-Z][\w&.-]*){1,4}$/.test(normalized);
 }
@@ -496,7 +507,7 @@ function looksLikeRoleLine(value: string): boolean {
   if (Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
   if (looksLikeStandaloneCompanyLine(normalized) || looksLikeCompanyName(normalized)) return false;
 
-  return JOB_TITLE_RE.test(normalized);
+  return looksLikeRoleLabel(normalized);
 }
 
 function looksLikeRoleTail(value: string): boolean {
