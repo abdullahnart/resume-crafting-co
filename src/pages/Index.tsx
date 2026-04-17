@@ -5,7 +5,8 @@ import { TemplateRenderer } from '@/components/resume/TemplateRenderer';
 import { TemplateName } from '@/types/resume';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Download, ChevronLeft, ChevronRight, RotateCcw, FileText, Eye } from 'lucide-react';
+import { Download, ChevronLeft, ChevronRight, RotateCcw, FileText, Eye, Palette } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
@@ -95,82 +96,106 @@ function ResumeBuilder() {
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* Form Panel */}
         <div className={`no-print w-full md:w-[420px] border-r flex flex-col ${mobileView === 'preview' ? 'hidden md:flex' : 'flex'}`}>
-          {/* Step navigation */}
-          <div className="flex items-center border-b px-3 py-2 gap-1 overflow-x-auto">
-            {STEPS.map((s, i) => (
-              <button
-                key={s.label}
-                onClick={() => setActiveStep(i)}
-                className={`px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors ${
-                  i === activeStep ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
+          <Tabs defaultValue="content" className="flex-1 flex flex-col overflow-hidden">
+            <TabsList className="rounded-none w-full justify-start h-11 bg-background border-b px-2 gap-1">
+              <TabsTrigger value="content" className="data-[state=active]:bg-muted gap-1.5">
+                <FileText className="h-4 w-4" /> Content Editor
+              </TabsTrigger>
+              <TabsTrigger value="designer" className="data-[state=active]:bg-muted gap-1.5">
+                <Palette className="h-4 w-4" /> Designer
+              </TabsTrigger>
+            </TabsList>
 
-          <ScrollArea className="flex-1 p-4">
-            <StepComponent />
+            <TabsContent value="content" className="flex-1 flex flex-col mt-0 overflow-hidden data-[state=inactive]:hidden">
+              {/* Step navigation */}
+              <div className="flex items-center border-b px-3 py-2 gap-1 overflow-x-auto">
+                {STEPS.map((s, i) => (
+                  <button
+                    key={s.label}
+                    onClick={() => setActiveStep(i)}
+                    className={`px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors ${
+                      i === activeStep ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
 
-            {/* Step buttons */}
-            <div className="flex justify-between mt-6 pt-4 border-t">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setActiveStep(Math.max(0, activeStep - 1))}
-                disabled={activeStep === 0}
-              >
-                <ChevronLeft className="h-4 w-4 mr-1" /> Back
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => setActiveStep(Math.min(STEPS.length - 1, activeStep + 1))}
-                disabled={activeStep === STEPS.length - 1}
-              >
-                Next <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
-          </ScrollArea>
+              <ScrollArea className="flex-1 p-4">
+                <StepComponent />
+
+                {/* Step buttons */}
+                <div className="flex justify-between mt-6 pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActiveStep(Math.max(0, activeStep - 1))}
+                    disabled={activeStep === 0}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" /> Back
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => setActiveStep(Math.min(STEPS.length - 1, activeStep + 1))}
+                    disabled={activeStep === STEPS.length - 1}
+                  >
+                    Next <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              </ScrollArea>
+            </TabsContent>
+
+            <TabsContent value="designer" className="flex-1 mt-0 overflow-hidden data-[state=inactive]:hidden">
+              <ScrollArea className="h-full p-4">
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-sm font-semibold mb-3" style={{ fontFamily: 'var(--font-heading)' }}>Template</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {TEMPLATES.map(t => (
+                        <button
+                          key={t.key}
+                          onClick={() => setTemplate(t.key)}
+                          className={`px-3 py-2 rounded border text-sm font-medium transition-colors ${
+                            template === t.key ? 'bg-primary text-primary-foreground border-primary' : 'bg-background hover:bg-muted border-border'
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-semibold mb-3" style={{ fontFamily: 'var(--font-heading)' }}>Accent Color</h3>
+                    <div className="flex flex-wrap gap-2 items-center">
+                      {ACCENT_COLORS.map(c => (
+                        <button
+                          key={c}
+                          onClick={() => setAccentColor(c)}
+                          className={`w-8 h-8 rounded-full border-2 transition-transform ${accentColor === c ? 'border-foreground scale-110' : 'border-transparent'}`}
+                          style={{ backgroundColor: c }}
+                        />
+                      ))}
+                      <label className="w-8 h-8 rounded-full border-2 border-dashed border-border flex items-center justify-center cursor-pointer hover:bg-muted">
+                        <input
+                          type="color"
+                          value={accentColor}
+                          onChange={e => setAccentColor(e.target.value)}
+                          className="opacity-0 w-0 h-0"
+                        />
+                        <Palette className="h-4 w-4 text-muted-foreground" />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
         </div>
 
         {/* Preview Panel */}
         <div className={`flex-1 flex flex-col bg-muted/50 ${mobileView === 'form' ? 'hidden md:flex' : 'flex'}`}>
-          {/* Template & color picker bar */}
-          <div className="no-print border-b bg-background px-4 py-2 flex items-center gap-4 overflow-x-auto">
-            <div className="flex gap-1.5">
-              {TEMPLATES.map(t => (
-                <button
-                  key={t.key}
-                  onClick={() => setTemplate(t.key)}
-                  className={`px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors ${
-                    template === t.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-            <div className="h-4 w-px bg-border" />
-            <div className="flex gap-1.5 items-center">
-              {ACCENT_COLORS.map(c => (
-                <button
-                  key={c}
-                  onClick={() => setAccentColor(c)}
-                  className={`w-5 h-5 rounded-full border-2 transition-transform ${accentColor === c ? 'border-foreground scale-125' : 'border-transparent'}`}
-                  style={{ backgroundColor: c }}
-                />
-              ))}
-              <input
-                type="color"
-                value={accentColor}
-                onChange={e => setAccentColor(e.target.value)}
-                className="w-5 h-5 rounded cursor-pointer border-0 p-0"
-                title="Custom color"
-              />
-            </div>
-          </div>
-
           {/* Resume preview */}
           <ScrollArea className="flex-1">
             <div className="flex justify-center p-6">
