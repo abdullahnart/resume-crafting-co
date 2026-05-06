@@ -5,14 +5,16 @@ import { MinimalTemplate } from './templates/MinimalTemplate';
 import { CreativeTemplate } from './templates/CreativeTemplate';
 import { ProfessionalTemplate } from './templates/ProfessionalTemplate';
 import { CompactTemplate } from './templates/CompactTemplate';
+import { DesignSettings } from '@/contexts/ResumeContext';
 
 interface Props {
   template: TemplateName;
   data: ResumeData;
   accentColor: string;
+  design?: DesignSettings;
 }
 
-const templates: Record<TemplateName, React.ComponentType<{ data: ResumeData; accentColor: string }>> = {
+const templates: Record<TemplateName, React.ComponentType<{ data: ResumeData; accentColor: string; design?: DesignSettings }>> = {
   classic: ClassicTemplate,
   modern: ModernTemplate,
   minimal: MinimalTemplate,
@@ -21,7 +23,7 @@ const templates: Record<TemplateName, React.ComponentType<{ data: ResumeData; ac
   compact: CompactTemplate,
 };
 
-export function TemplateRenderer({ template, data, accentColor }: Props) {
+export function TemplateRenderer({ template, data, accentColor, design }: Props) {
   const Component = templates[template];
-  return <Component data={data} accentColor={accentColor} />;
+  return <Component data={data} accentColor={accentColor} design={design} />;
 }
