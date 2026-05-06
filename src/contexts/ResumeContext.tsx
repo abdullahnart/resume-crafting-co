@@ -23,6 +23,8 @@ const ResumeContext = createContext<ResumeContextType | null>(null);
 const STORAGE_KEY = 'resume-maker-data';
 const TEMPLATE_KEY = 'resume-maker-template';
 const ACCENT_KEY = 'resume-maker-accent';
+const FONT_KEY = 'resume-maker-font';
+const SPACING_KEY = 'resume-maker-spacing';
 
 function loadFromStorage(): ResumeData {
   try {
@@ -40,19 +42,19 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
   const [accentColor, setAccentColor] = useState(
     () => localStorage.getItem(ACCENT_KEY) || '#0d0d0d'
   );
+  const [fontFamily, setFontFamily] = useState(
+    () => localStorage.getItem(FONT_KEY) || 'Libre Baskerville'
+  );
+  const [spacing, setSpacing] = useState<number>(
+    () => Number(localStorage.getItem(SPACING_KEY)) || 1
+  );
   const [activeStep, setActiveStep] = useState(0);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [data]);
-
-  useEffect(() => {
-    localStorage.setItem(TEMPLATE_KEY, template);
-  }, [template]);
-
-  useEffect(() => {
-    localStorage.setItem(ACCENT_KEY, accentColor);
-  }, [accentColor]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }, [data]);
+  useEffect(() => { localStorage.setItem(TEMPLATE_KEY, template); }, [template]);
+  useEffect(() => { localStorage.setItem(ACCENT_KEY, accentColor); }, [accentColor]);
+  useEffect(() => { localStorage.setItem(FONT_KEY, fontFamily); }, [fontFamily]);
+  useEffect(() => { localStorage.setItem(SPACING_KEY, String(spacing)); }, [spacing]);
 
   const updateField = useCallback(<K extends keyof ResumeData>(key: K, value: ResumeData[K]) => {
     setData(prev => ({ ...prev, [key]: value }));
@@ -62,6 +64,8 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
     setData(defaultResumeData);
     setTemplate('classic');
     setAccentColor('#0d0d0d');
+    setFontFamily('Libre Baskerville');
+    setSpacing(1);
   }, []);
 
   return (
@@ -69,6 +73,8 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
       data, setData, updateField,
       template, setTemplate,
       accentColor, setAccentColor,
+      fontFamily, setFontFamily,
+      spacing, setSpacing,
       activeStep, setActiveStep,
       resetData,
     }}>
