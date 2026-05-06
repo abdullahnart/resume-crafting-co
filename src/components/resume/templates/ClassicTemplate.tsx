@@ -1,15 +1,31 @@
 import { TemplateProps } from '@/types/resume';
+import { formatDate } from '@/lib/resumeFormat';
 
-export function ClassicTemplate({ data, accentColor }: TemplateProps) {
+export function ClassicTemplate({ data, accentColor, design }: TemplateProps) {
   const { personalInfo: p, summary, experience, education, skills, languages, certifications, projects } = data;
+  const dateFmt = design?.dateFormat ?? 'numbers';
+  const headerAlign = design?.headerAlign ?? 'center';
+  const dateAlign = design?.dateAlign ?? 'right';
+  const locationAlign = design?.locationAlign ?? 'right';
+  const skillsLayout = design?.skillsLayout ?? 'commaList';
+  const skillsColumns = design?.skillsColumns ?? 2;
+  const lineHeight = design?.lineHeight ?? 1.2;
+  const listLineHeight = design?.listLineHeight ?? 1.4;
+
+  const fmt = (d: string) => formatDate(d, dateFmt);
+
+  const headerAlignClass =
+    headerAlign === 'left' ? 'text-left' : headerAlign === 'right' ? 'text-right' : 'text-center';
+  const headerJustify =
+    headerAlign === 'left' ? 'justify-start' : headerAlign === 'right' ? 'justify-end' : 'justify-center';
 
   return (
-    <div className="font-serif text-[11px] leading-relaxed text-gray-900 p-8" style={{ fontFamily: "'Libre Baskerville', serif" }}>
+    <div className="font-serif text-[11px] text-gray-900 p-8" style={{ lineHeight }}>
       {/* Header */}
-      <div className="text-center border-b-2 pb-4 mb-4" style={{ borderColor: accentColor }}>
+      <div className={`${headerAlignClass} border-b-2 pb-4 mb-4`} style={{ borderColor: accentColor }}>
         <h1 className="text-2xl font-bold tracking-wide" style={{ color: accentColor }}>{p.fullName || 'Your Name'}</h1>
         {p.jobTitle && <p className="text-sm mt-1 text-gray-600">{p.jobTitle}</p>}
-        <div className="flex justify-center gap-3 mt-2 text-[10px] text-gray-500 flex-wrap">
+        <div className={`flex ${headerJustify} gap-3 mt-2 text-[10px] text-gray-500 flex-wrap`}>
           {p.email && <span>{p.email}</span>}
           {p.phone && <span>• {p.phone}</span>}
           {p.location && <span>• {p.location}</span>}
@@ -30,18 +46,24 @@ export function ClassicTemplate({ data, accentColor }: TemplateProps) {
       {experience.length > 0 && (
         <div className="mb-4">
           <h2 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>Experience</h2>
-          {experience.map(exp => (
-            <div key={exp.id} className="mb-3">
-              <div className="flex justify-between">
-                <span className="font-bold">{exp.role}</span>
-                <span className="text-gray-500 text-[10px]">{exp.startDate} — {exp.current ? 'Present' : exp.endDate}</span>
+          {experience.map(exp => {
+            const dateStr = `${fmt(exp.startDate)}${exp.startDate ? ' — ' : ''}${exp.current ? 'Present' : fmt(exp.endDate)}`;
+            const dateEl = <span className="text-gray-500 text-[10px]">{dateStr}</span>;
+            const roleEl = <span className="font-bold">{exp.role}</span>;
+            return (
+              <div key={exp.id} className="mb-3">
+                <div className="flex justify-between">
+                  {dateAlign === 'left' ? <>{dateEl}{roleEl}</> : <>{roleEl}{dateEl}</>}
+                </div>
+                <div className={`flex justify-between ${locationAlign === 'left' ? 'flex-row-reverse' : ''}`}>
+                  <p className="text-gray-600 italic">{exp.company}</p>
+                </div>
+                <ul className="list-disc list-inside mt-1 text-gray-700" style={{ lineHeight: listLineHeight }}>
+                  {exp.bullets.filter(b => b).map((b, i) => <li key={i}>{b}</li>)}
+                </ul>
               </div>
-              <p className="text-gray-600 italic">{exp.company}</p>
-              <ul className="list-disc list-inside mt-1 text-gray-700">
-                {exp.bullets.filter(b => b).map((b, i) => <li key={i}>{b}</li>)}
-              </ul>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -49,15 +71,19 @@ export function ClassicTemplate({ data, accentColor }: TemplateProps) {
       {education.length > 0 && (
         <div className="mb-4">
           <h2 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>Education</h2>
-          {education.map(edu => (
-            <div key={edu.id} className="mb-2">
-              <div className="flex justify-between">
-                <span className="font-bold">{edu.degree} {edu.field && `in ${edu.field}`}</span>
-                <span className="text-gray-500 text-[10px]">{edu.startDate} — {edu.endDate}</span>
+          {education.map(edu => {
+            const dateStr = `${fmt(edu.startDate)}${edu.startDate ? ' — ' : ''}${fmt(edu.endDate)}`;
+            const dateEl = <span className="text-gray-500 text-[10px]">{dateStr}</span>;
+            const titleEl = <span className="font-bold">{edu.degree} {edu.field && `in ${edu.field}`}</span>;
+            return (
+              <div key={edu.id} className="mb-2">
+                <div className="flex justify-between">
+                  {dateAlign === 'left' ? <>{dateEl}{titleEl}</> : <>{titleEl}{dateEl}</>}
+                </div>
+                <p className="text-gray-600">{edu.school}{edu.gpa && ` • GPA: ${edu.gpa}`}</p>
               </div>
-              <p className="text-gray-600">{edu.school}{edu.gpa && ` • GPA: ${edu.gpa}`}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -65,9 +91,26 @@ export function ClassicTemplate({ data, accentColor }: TemplateProps) {
       {skills.length > 0 && (
         <div className="mb-4">
           <h2 className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: accentColor }}>Skills</h2>
-          <ul className="list-disc list-inside text-gray-700 space-y-0.5">
-            {skills.map(s => s.name).filter(Boolean).map(name => <li key={name}>{name}</li>)}
-          </ul>
+          {skillsLayout === 'comma' && (
+            <p className="text-gray-700" style={{ lineHeight: listLineHeight }}>
+              {skills.map(s => s.name).filter(Boolean).join(', ')}
+            </p>
+          )}
+          {skillsLayout === 'commaList' && (
+            <ul className="list-disc list-inside text-gray-700" style={{ lineHeight: listLineHeight }}>
+              {skills.map(s => s.name).filter(Boolean).map(name => <li key={name}>{name}</li>)}
+            </ul>
+          )}
+          {skillsLayout === 'columns' && (
+            <ul
+              className="text-gray-700 list-disc list-inside"
+              style={{ columnCount: skillsColumns, columnGap: '1rem', lineHeight: listLineHeight }}
+            >
+              {skills.map(s => s.name).filter(Boolean).map(name => (
+                <li key={name} style={{ breakInside: 'avoid' }}>{name}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
@@ -84,7 +127,7 @@ export function ClassicTemplate({ data, accentColor }: TemplateProps) {
         <div className="mb-4">
           <h2 className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: accentColor }}>Certifications</h2>
           {certifications.map(c => (
-            <p key={c.id} className="text-gray-700">{c.name}{c.issuer && ` — ${c.issuer}`}{c.date && ` (${c.date})`}</p>
+            <p key={c.id} className="text-gray-700">{c.name}{c.issuer && ` — ${c.issuer}`}{c.date && ` (${fmt(c.date)})`}</p>
           ))}
         </div>
       )}
