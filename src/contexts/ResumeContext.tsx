@@ -9,6 +9,10 @@ interface ResumeContextType {
   setTemplate: (t: TemplateName) => void;
   accentColor: string;
   setAccentColor: (c: string) => void;
+  fontFamily: string;
+  setFontFamily: (f: string) => void;
+  spacing: number;
+  setSpacing: (s: number) => void;
   activeStep: number;
   setActiveStep: (s: number) => void;
   resetData: () => void;
