@@ -402,9 +402,7 @@ function ResumeBuilder() {
                   paddingBottom: `${marginYmm}mm`,
                 }}
               >
-                <div style={{ margin: `-${marginYmm}mm -${marginXmm}mm` }}>
-                  <TemplateRenderer template={template} data={data} accentColor={design.accentColor} design={design} />
-                </div>
+                <TemplateRenderer template={template} data={data} accentColor={design.accentColor} design={design} />
               </div>
             </div>
           </ScrollArea>
