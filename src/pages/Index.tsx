@@ -1,16 +1,18 @@
 import React, { useRef, useCallback, useState } from 'react';
-import { ResumeProvider, useResume } from '@/contexts/ResumeContext';
+import { ResumeProvider, useResume, DesignSettings } from '@/contexts/ResumeContext';
 import { PersonalInfoForm, SummaryForm, ExperienceForm, EducationForm, SkillsForm, AdditionalForm } from '@/components/resume/FormSections';
 import { TemplateRenderer } from '@/components/resume/TemplateRenderer';
 import { TemplateName } from '@/types/resume';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Slider } from '@/components/ui/slider';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Download, ChevronLeft, ChevronRight, RotateCcw, FileText, Eye, Palette, BarChart3, Briefcase, Mail, Type } from 'lucide-react';
+import { Download, ChevronLeft, ChevronRight, RotateCcw, FileText, Eye, Palette } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -24,18 +26,23 @@ const TEMPLATES: { key: TemplateName; label: string }[] = [
   { key: 'compact', label: 'Compact' },
 ];
 
-const ACCENT_COLORS = ['#0d0d0d', '#1e3a5f', '#064e3b', '#7c2d12', '#5b21b6', '#be123c', '#0369a1', '#854d0e'];
+const ACCENT_COLORS = ['#0d0d0d', '#6b7280', '#0f766e', '#a16207', '#dc2626', '#7f1d1d', '#2563eb', '#1e3a8a'];
 
 const FONT_FAMILIES = [
   { label: 'Libre Baskerville', value: 'Libre Baskerville, serif' },
-  { label: 'Source Sans 3', value: '"Source Sans 3", sans-serif' },
-  { label: 'Georgia', value: 'Georgia, serif' },
-  { label: 'Times New Roman', value: '"Times New Roman", serif' },
-  { label: 'Arial', value: 'Arial, sans-serif' },
-  { label: 'Helvetica', value: 'Helvetica, Arial, sans-serif' },
+  { label: 'Poppins', value: 'Poppins, sans-serif' },
   { label: 'Inter', value: 'Inter, system-ui, sans-serif' },
   { label: 'Roboto', value: 'Roboto, sans-serif' },
+  { label: 'Open Sans', value: '"Open Sans", sans-serif' },
+  { label: 'Source Sans 3', value: '"Source Sans 3", sans-serif' },
+  { label: 'Georgia', value: 'Georgia, serif' },
+  { label: 'Arial', value: 'Arial, sans-serif' },
 ];
+
+const PAPER: Record<string, { wMm: number; hMm: number }> = {
+  a4: { wMm: 210, hMm: 297 },
+  letter: { wMm: 215.9, hMm: 279.4 },
+};
 
 const STEPS = [
   { label: 'Personal', component: PersonalInfoForm },
@@ -46,27 +53,202 @@ const STEPS = [
   { label: 'Additional', component: AdditionalForm },
 ];
 
-function ComingSoon({ title, description, icon: Icon }: { title: string; description: string; icon: React.ComponentType<{ className?: string }> }) {
+function AlignButtons<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { label: string; value: T }[] }) {
   return (
-    <div className="flex-1 flex items-center justify-center p-8">
-      <div className="text-center max-w-sm">
-        <div className="mx-auto w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-4">
-          <Icon className="h-7 w-7 text-muted-foreground" />
-        </div>
-        <h2 className="text-lg font-semibold mb-2" style={{ fontFamily: 'var(--font-heading)' }}>{title}</h2>
-        <p className="text-sm text-muted-foreground">{description}</p>
-        <p className="text-xs text-muted-foreground mt-3 italic">Coming soon</p>
-      </div>
+    <div className="inline-flex rounded-md border overflow-hidden">
+      {options.map(o => (
+        <button
+          key={o.value}
+          onClick={() => onChange(o.value)}
+          className={`px-3 py-1.5 text-xs font-medium transition-colors ${value === o.value ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }
 
+function PresentationPanel() {
+  const { template, setTemplate, design, updateDesign } = useResume();
+  const d = design;
+
+  return (
+    <Accordion type="multiple" defaultValue={['template', 'styling', 'align', 'skills', 'page']} className="w-full">
+      <AccordionItem value="template">
+        <AccordionTrigger className="text-sm">Template</AccordionTrigger>
+        <AccordionContent>
+          <div className="grid grid-cols-2 gap-2">
+            {TEMPLATES.map(t => (
+              <button
+                key={t.key}
+                onClick={() => setTemplate(t.key)}
+                className={`px-3 py-2 rounded border text-sm font-medium transition-colors ${
+                  template === t.key ? 'bg-primary text-primary-foreground border-primary' : 'bg-background hover:bg-muted border-border'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+
+      <AccordionItem value="styling">
+        <AccordionTrigger className="text-sm">Styling</AccordionTrigger>
+        <AccordionContent className="space-y-4">
+          <div>
+            <label className="text-xs font-medium mb-1.5 block">Font Family</label>
+            <Select value={d.fontFamily} onValueChange={(v) => updateDesign('fontFamily', v)}>
+              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {FONT_FAMILIES.map(f => (
+                  <SelectItem key={f.label} value={f.label} style={{ fontFamily: f.value }}>{f.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-1.5">
+              <label className="text-xs font-medium">Line Height</label>
+              <span className="text-xs text-muted-foreground tabular-nums">{Math.round(d.lineHeight * 100)}%</span>
+            </div>
+            <Slider value={[d.lineHeight]} min={1} max={1.5} step={0.05} onValueChange={(v) => updateDesign('lineHeight', v[0])} />
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-1.5">
+              <label className="text-xs font-medium">List Line Height</label>
+              <span className="text-xs text-muted-foreground tabular-nums">{Math.round(d.listLineHeight * 100)}%</span>
+            </div>
+            <Slider value={[d.listLineHeight]} min={1.2} max={1.8} step={0.05} onValueChange={(v) => updateDesign('listLineHeight', v[0])} />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium mb-1.5 block">Accent Color</label>
+            <div className="flex flex-wrap gap-2 items-center">
+              {ACCENT_COLORS.map(c => (
+                <button
+                  key={c}
+                  onClick={() => updateDesign('accentColor', c)}
+                  className={`w-7 h-7 rounded-full border-2 transition-transform ${d.accentColor === c ? 'border-foreground scale-110' : 'border-transparent'}`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+              <label className="w-7 h-7 rounded-full border-2 border-dashed border-border flex items-center justify-center cursor-pointer hover:bg-muted">
+                <input type="color" value={d.accentColor} onChange={e => updateDesign('accentColor', e.target.value)} className="opacity-0 w-0 h-0" />
+                <Palette className="h-3.5 w-3.5 text-muted-foreground" />
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium mb-1.5 block">Date Format</label>
+            <Select value={d.dateFormat} onValueChange={(v) => updateDesign('dateFormat', v as DesignSettings['dateFormat'])}>
+              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="numbers">Numbers (01/2023)</SelectItem>
+                <SelectItem value="monthYear">Month Year (Jan 2023)</SelectItem>
+                <SelectItem value="fullDate">Full Date (January 2023)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+
+      <AccordionItem value="align">
+        <AccordionTrigger className="text-sm">Alignments &amp; Layout</AccordionTrigger>
+        <AccordionContent className="space-y-3">
+          <div>
+            <label className="text-xs font-medium mb-1.5 block">Header Alignment</label>
+            <AlignButtons
+              value={d.headerAlign}
+              onChange={(v) => updateDesign('headerAlign', v)}
+              options={[{ label: 'Left', value: 'left' }, { label: 'Center', value: 'center' }, { label: 'Right', value: 'right' }]}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1.5 block">Date Alignment</label>
+            <AlignButtons
+              value={d.dateAlign}
+              onChange={(v) => updateDesign('dateAlign', v)}
+              options={[{ label: 'Left', value: 'left' }, { label: 'Right', value: 'right' }]}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1.5 block">Location Alignment</label>
+            <AlignButtons
+              value={d.locationAlign}
+              onChange={(v) => updateDesign('locationAlign', v)}
+              options={[{ label: 'Left', value: 'left' }, { label: 'Right', value: 'right' }]}
+            />
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+
+      <AccordionItem value="skills">
+        <AccordionTrigger className="text-sm">Skills Layout</AccordionTrigger>
+        <AccordionContent className="space-y-3">
+          <div>
+            <label className="text-xs font-medium mb-1.5 block">Display Type</label>
+            <AlignButtons
+              value={d.skillsLayout}
+              onChange={(v) => updateDesign('skillsLayout', v)}
+              options={[
+                { label: 'Comma', value: 'comma' },
+                { label: 'List', value: 'commaList' },
+                { label: 'Columns', value: 'columns' },
+              ]}
+            />
+          </div>
+          {d.skillsLayout === 'columns' && (
+            <div>
+              <div className="flex justify-between mb-1.5">
+                <label className="text-xs font-medium">Number of Columns</label>
+                <span className="text-xs text-muted-foreground tabular-nums">{d.skillsColumns}</span>
+              </div>
+              <Slider value={[d.skillsColumns]} min={1} max={4} step={1} onValueChange={(v) => updateDesign('skillsColumns', v[0])} />
+            </div>
+          )}
+        </AccordionContent>
+      </AccordionItem>
+
+      <AccordionItem value="page">
+        <AccordionTrigger className="text-sm">Page Setup</AccordionTrigger>
+        <AccordionContent className="space-y-3">
+          <div>
+            <label className="text-xs font-medium mb-1.5 block">Paper Size</label>
+            <Select value={d.paperSize} onValueChange={(v) => updateDesign('paperSize', v as DesignSettings['paperSize'])}>
+              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="a4">A4 (210 × 297 mm)</SelectItem>
+                <SelectItem value="letter">Letter (8.5 × 11 in)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <div className="flex justify-between mb-1.5">
+              <label className="text-xs font-medium">Left &amp; Right Margins</label>
+              <span className="text-xs text-muted-foreground tabular-nums">{d.marginX.toFixed(2)} in</span>
+            </div>
+            <Slider value={[d.marginX]} min={0.3} max={1} step={0.05} onValueChange={(v) => updateDesign('marginX', v[0])} />
+          </div>
+          <div>
+            <div className="flex justify-between mb-1.5">
+              <label className="text-xs font-medium">Top &amp; Bottom Margins</label>
+              <span className="text-xs text-muted-foreground tabular-nums">{d.marginY.toFixed(2)} in</span>
+            </div>
+            <Slider value={[d.marginY]} min={0.3} max={1} step={0.05} onValueChange={(v) => updateDesign('marginY', v[0])} />
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  );
+}
+
 function ResumeBuilder() {
-  const {
-    data, template, setTemplate, accentColor, setAccentColor,
-    fontFamily, setFontFamily, spacing, setSpacing,
-    activeStep, setActiveStep, resetData,
-  } = useResume();
+  const { data, template, design, activeStep, setActiveStep, resetData } = useResume();
   const resumeRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
   const [mobileView, setMobileView] = useState<'form' | 'preview'>('form');
@@ -79,7 +261,8 @@ function ResumeBuilder() {
     try {
       const canvas = await html2canvas(resumeRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
+      const fmt = design.paperSize === 'letter' ? 'letter' : 'a4';
+      const pdf = new jsPDF('p', 'mm', fmt);
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
@@ -88,9 +271,12 @@ function ResumeBuilder() {
       console.error('PDF generation failed:', err);
     }
     setDownloading(false);
-  }, [data.personalInfo.fullName]);
+  }, [data.personalInfo.fullName, design.paperSize]);
 
-  const fontStack = FONT_FAMILIES.find(f => f.label === fontFamily)?.value || fontFamily;
+  const fontStack = FONT_FAMILIES.find(f => f.label === design.fontFamily)?.value || design.fontFamily;
+  const paper = PAPER[design.paperSize];
+  const marginXmm = design.marginX * 25.4;
+  const marginYmm = design.marginY * 25.4;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -111,7 +297,7 @@ function ResumeBuilder() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Reset everything?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will clear all your resume content and reset the template, accent color, font, and spacing to defaults. This action cannot be undone.
+                  This will clear all your resume content and reset all design settings to defaults. This action cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -146,21 +332,12 @@ function ResumeBuilder() {
         {/* Form Panel */}
         <div className={`no-print w-full md:w-[460px] border-r flex flex-col ${mobileView === 'preview' ? 'hidden md:flex' : 'flex'}`}>
           <Tabs defaultValue="content" className="flex-1 flex flex-col overflow-hidden">
-            <TabsList className="rounded-none w-full justify-start h-auto bg-background border-b px-2 py-1.5 gap-1 flex-wrap">
+            <TabsList className="rounded-none w-full justify-start h-auto bg-background border-b px-2 py-1.5 gap-1">
               <TabsTrigger value="content" className="data-[state=active]:bg-muted gap-1.5 text-xs">
                 <FileText className="h-3.5 w-3.5" /> Content Editor
               </TabsTrigger>
               <TabsTrigger value="designer" className="data-[state=active]:bg-muted gap-1.5 text-xs">
                 <Palette className="h-3.5 w-3.5" /> Designer
-              </TabsTrigger>
-              <TabsTrigger value="analyzer" className="data-[state=active]:bg-muted gap-1.5 text-xs">
-                <BarChart3 className="h-3.5 w-3.5" /> Analyzer
-              </TabsTrigger>
-              <TabsTrigger value="matcher" className="data-[state=active]:bg-muted gap-1.5 text-xs">
-                <Briefcase className="h-3.5 w-3.5" /> Job Matcher
-              </TabsTrigger>
-              <TabsTrigger value="cover" className="data-[state=active]:bg-muted gap-1.5 text-xs">
-                <Mail className="h-3.5 w-3.5" /> Cover Letter
               </TabsTrigger>
             </TabsList>
 
@@ -192,96 +369,17 @@ function ResumeBuilder() {
               </ScrollArea>
             </TabsContent>
 
-            <TabsContent value="designer" className="flex-1 mt-0 overflow-hidden data-[state=inactive]:hidden">
-              <ScrollArea className="h-full p-4">
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-sm font-semibold mb-3" style={{ fontFamily: 'var(--font-heading)' }}>Template</h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      {TEMPLATES.map(t => (
-                        <button
-                          key={t.key}
-                          onClick={() => setTemplate(t.key)}
-                          className={`px-3 py-2 rounded border text-sm font-medium transition-colors ${
-                            template === t.key ? 'bg-primary text-primary-foreground border-primary' : 'bg-background hover:bg-muted border-border'
-                          }`}
-                        >
-                          {t.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-sm font-semibold mb-3" style={{ fontFamily: 'var(--font-heading)' }}>Accent Color</h3>
-                    <div className="flex flex-wrap gap-2 items-center">
-                      {ACCENT_COLORS.map(c => (
-                        <button
-                          key={c}
-                          onClick={() => setAccentColor(c)}
-                          className={`w-8 h-8 rounded-full border-2 transition-transform ${accentColor === c ? 'border-foreground scale-110' : 'border-transparent'}`}
-                          style={{ backgroundColor: c }}
-                        />
-                      ))}
-                      <label className="w-8 h-8 rounded-full border-2 border-dashed border-border flex items-center justify-center cursor-pointer hover:bg-muted">
-                        <input type="color" value={accentColor} onChange={e => setAccentColor(e.target.value)} className="opacity-0 w-0 h-0" />
-                        <Palette className="h-4 w-4 text-muted-foreground" />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5" style={{ fontFamily: 'var(--font-heading)' }}>
-                      <Type className="h-4 w-4" /> Font Family
-                    </h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      {FONT_FAMILIES.map(f => (
-                        <button
-                          key={f.label}
-                          onClick={() => setFontFamily(f.label)}
-                          className={`px-3 py-2 rounded border text-xs font-medium text-left transition-colors ${
-                            fontFamily === f.label ? 'bg-primary text-primary-foreground border-primary' : 'bg-background hover:bg-muted border-border'
-                          }`}
-                          style={{ fontFamily: f.value }}
-                        >
-                          {f.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold" style={{ fontFamily: 'var(--font-heading)' }}>Spacing / Density</h3>
-                      <span className="text-xs text-muted-foreground tabular-nums">{spacing.toFixed(2)}x</span>
-                    </div>
-                    <Slider
-                      value={[spacing]}
-                      min={0.75}
-                      max={1.5}
-                      step={0.05}
-                      onValueChange={(v) => setSpacing(v[0])}
-                    />
-                    <div className="flex justify-between mt-1.5 text-[10px] text-muted-foreground uppercase tracking-wide">
-                      <span>Compact</span>
-                      <span>Default</span>
-                      <span>Roomy</span>
-                    </div>
-                  </div>
-                </div>
-              </ScrollArea>
-            </TabsContent>
-
-            <TabsContent value="analyzer" className="flex-1 mt-0 data-[state=inactive]:hidden flex">
-              <ComingSoon title="Resume Analyzer" description="Get an instant ATS-friendliness score, keyword gaps, and improvement tips for your resume." icon={BarChart3} />
-            </TabsContent>
-
-            <TabsContent value="matcher" className="flex-1 mt-0 data-[state=inactive]:hidden flex">
-              <ComingSoon title="Job Matcher" description="Paste a job description and see how well your resume matches with tailored recommendations." icon={Briefcase} />
-            </TabsContent>
-
-            <TabsContent value="cover" className="flex-1 mt-0 data-[state=inactive]:hidden flex">
-              <ComingSoon title="Cover Letter" description="Generate a personalized cover letter from your resume content and a target job description." icon={Mail} />
+            <TabsContent value="designer" className="flex-1 mt-0 overflow-hidden data-[state=inactive]:hidden flex flex-col">
+              <Tabs defaultValue="presentation" className="flex-1 flex flex-col overflow-hidden">
+                <TabsList className="rounded-none w-full justify-start bg-muted/40 border-b px-2 py-1 gap-1 h-auto">
+                  <TabsTrigger value="presentation" className="text-xs data-[state=active]:bg-background">Presentation</TabsTrigger>
+                </TabsList>
+                <TabsContent value="presentation" className="flex-1 mt-0 overflow-hidden data-[state=inactive]:hidden">
+                  <ScrollArea className="h-full p-4">
+                    <PresentationPanel />
+                  </ScrollArea>
+                </TabsContent>
+              </Tabs>
             </TabsContent>
           </Tabs>
         </div>
@@ -294,15 +392,17 @@ function ResumeBuilder() {
                 ref={resumeRef}
                 className="bg-white shadow-lg"
                 style={{
-                  width: '210mm',
-                  minHeight: '297mm',
+                  width: `${paper.wMm}mm`,
+                  minHeight: `${paper.hMm}mm`,
                   maxWidth: '100%',
                   fontFamily: fontStack,
-                  ['--resume-spacing' as string]: String(spacing),
-                  lineHeight: 1.4 * spacing,
+                  paddingLeft: `${marginXmm}mm`,
+                  paddingRight: `${marginXmm}mm`,
+                  paddingTop: `${marginYmm}mm`,
+                  paddingBottom: `${marginYmm}mm`,
                 }}
               >
-                <TemplateRenderer template={template} data={data} accentColor={accentColor} />
+                <TemplateRenderer template={template} data={data} accentColor={design.accentColor} design={design} />
               </div>
             </div>
           </ScrollArea>

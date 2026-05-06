@@ -70,6 +70,7 @@ export type TemplateName = 'classic' | 'modern' | 'minimal' | 'creative' | 'prof
 export interface TemplateProps {
   data: ResumeData;
   accentColor: string;
+  design?: import('@/contexts/ResumeContext').DesignSettings;
 }
 
 export const defaultResumeData: ResumeData = {
