@@ -26,19 +26,22 @@ export function CompactTemplate({ data, accentColor, design }: TemplateProps) {
       {experience.length > 0 && (
         <div className="mb-2">
           <h2 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: accentColor }}>Experience</h2>
-          {experience.map(exp => (
-            <div key={exp.id} className="mb-1.5">
-              <div className="flex justify-between">
-                <span><span className="font-semibold">{exp.role}</span> · {exp.company}</span>
-                <span className="text-gray-400">{dateRange(exp.startDate, exp.endDate, exp.current, design)}</span>
+          {experience.map(exp => {
+            const dateEl = <span className="text-gray-400">{dateRange(exp.startDate, exp.endDate, exp.current, design)}</span>;
+            const titleEl = <span><span className="font-semibold">{exp.role}</span> · {exp.company}</span>;
+            return (
+              <div key={exp.id} className="mb-1.5">
+                <div className="flex justify-between">
+                  {d.dateAlign === 'left' ? <>{dateEl}{titleEl}</> : <>{titleEl}{dateEl}</>}
+                </div>
+                {exp.bullets.filter(b => b).length > 0 && (
+                  <ul className="list-disc list-inside text-gray-600 ml-2" style={{ lineHeight: d.listLineHeight }}>
+                    {exp.bullets.filter(b => b).map((b, i) => <li key={i}>{b}</li>)}
+                  </ul>
+                )}
               </div>
-              {exp.bullets.filter(b => b).length > 0 && (
-                <ul className="list-disc list-inside text-gray-600 ml-2" style={{ lineHeight: d.listLineHeight }}>
-                  {exp.bullets.filter(b => b).map((b, i) => <li key={i}>{b}</li>)}
-                </ul>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
