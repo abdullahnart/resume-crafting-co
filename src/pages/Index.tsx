@@ -247,6 +247,126 @@ function PresentationPanel() {
   );
 }
 
+const TEXT_FIELDS: { key: keyof DesignSettings['textSizes']; label: string; min: number; max: number }[] = [
+  { key: 'bodyCopy', label: 'Body Copy', min: 7, max: 14 },
+  { key: 'primaryHeading', label: 'Primary Heading', min: 8, max: 18 },
+  { key: 'secondaryHeading', label: 'Secondary Heading', min: 8, max: 16 },
+  { key: 'sectionTitle', label: 'Section Titles', min: 8, max: 16 },
+  { key: 'fullName', label: 'Full Name', min: 14, max: 36 },
+  { key: 'minorCopy', label: 'Minor Copy', min: 6, max: 12 },
+  { key: 'contactInfo', label: 'Contact Info', min: 7, max: 12 },
+];
+
+const WEIGHT_OPTIONS = [
+  { v: 'thin', l: 'Thin' }, { v: 'extralight', l: 'Extra Light' }, { v: 'light', l: 'Light' },
+  { v: 'regular', l: 'Regular' }, { v: 'medium', l: 'Medium' }, { v: 'semibold', l: 'Semi-Bold' },
+  { v: 'bold', l: 'Bold' }, { v: 'extrabold', l: 'Extra Bold' },
+] as const;
+
+const TRANSFORM_OPTIONS = [
+  { v: 'none', l: 'As Written' }, { v: 'uppercase', l: 'Uppercase' },
+  { v: 'lowercase', l: 'Lowercase' }, { v: 'capitalize', l: 'Capitalize' },
+  { v: 'small-caps', l: 'Small Caps' },
+] as const;
+
+const WEIGHT_FIELDS = ['bodyCopy','primaryHeading','secondaryHeading','sectionTitle','fullName','minorCopy'] as const;
+const TRANSFORM_FIELDS = ['primaryHeading','secondaryHeading','sectionTitle','fullName','minorCopy','bodyCopy'] as const;
+const FIELD_LABELS: Record<string, string> = {
+  bodyCopy: 'Body Copy', primaryHeading: 'Primary Heading', secondaryHeading: 'Secondary Heading',
+  sectionTitle: 'Section Titles', fullName: 'Full Name', minorCopy: 'Minor Copy', contactInfo: 'Contact Info',
+};
+
+function AdvancedPanel() {
+  const { design, updateDesign } = useResume();
+  const updateNested = <K extends 'textSizes'|'textWeights'|'textTransforms'>(group: K, key: string, value: any) => {
+    updateDesign(group, { ...(design[group] as any), [key]: value });
+  };
+
+  return (
+    <Accordion type="multiple" defaultValue={['sizes','weights','transforms','spacing','lh']} className="w-full">
+      <AccordionItem value="sizes">
+        <AccordionTrigger className="text-sm">Text Sizes</AccordionTrigger>
+        <AccordionContent className="space-y-3">
+          {TEXT_FIELDS.map(f => (
+            <div key={f.key} className="grid grid-cols-[110px_60px_1fr] items-center gap-2">
+              <label className="text-xs">{f.label}</label>
+              <div className="border rounded px-2 py-1 text-xs text-center">{design.textSizes[f.key]} pt</div>
+              <Slider value={[design.textSizes[f.key]]} min={f.min} max={f.max} step={1}
+                onValueChange={(v) => updateNested('textSizes', f.key, v[0])} />
+            </div>
+          ))}
+        </AccordionContent>
+      </AccordionItem>
+
+      <AccordionItem value="weights">
+        <AccordionTrigger className="text-sm">Text Weights</AccordionTrigger>
+        <AccordionContent className="space-y-2">
+          {WEIGHT_FIELDS.map(k => (
+            <div key={k} className="grid grid-cols-[140px_1fr] items-center gap-2">
+              <label className="text-xs">{FIELD_LABELS[k]}</label>
+              <Select value={design.textWeights[k]} onValueChange={(v) => updateNested('textWeights', k, v)}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {WEIGHT_OPTIONS.map(o => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          ))}
+        </AccordionContent>
+      </AccordionItem>
+
+      <AccordionItem value="transforms">
+        <AccordionTrigger className="text-sm">Text Transformations</AccordionTrigger>
+        <AccordionContent className="space-y-2">
+          {TRANSFORM_FIELDS.map(k => (
+            <div key={k} className="grid grid-cols-[140px_1fr] items-center gap-2">
+              <label className="text-xs">{FIELD_LABELS[k]}</label>
+              <Select value={design.textTransforms[k]} onValueChange={(v) => updateNested('textTransforms', k, v)}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TRANSFORM_OPTIONS.map(o => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          ))}
+        </AccordionContent>
+      </AccordionItem>
+
+      <AccordionItem value="spacing">
+        <AccordionTrigger className="text-sm">Letter Spacing</AccordionTrigger>
+        <AccordionContent>
+          <AlignButtons
+            value={design.letterSpacing}
+            onChange={(v) => updateDesign('letterSpacing', v)}
+            options={[
+              { label: 'Tight', value: 'tight' },
+              { label: 'Normal', value: 'normal' },
+              { label: 'Wide', value: 'wide' },
+              { label: 'Extra Wide', value: 'extrawide' },
+            ]}
+          />
+        </AccordionContent>
+      </AccordionItem>
+
+      <AccordionItem value="lh">
+        <AccordionTrigger className="text-sm">Line Height</AccordionTrigger>
+        <AccordionContent>
+          <AlignButtons
+            value={design.lineHeightPreset}
+            onChange={(v) => updateDesign('lineHeightPreset', v)}
+            options={[
+              { label: 'Compact', value: 'compact' },
+              { label: 'Normal', value: 'normal' },
+              { label: 'Relaxed', value: 'relaxed' },
+              { label: 'Loose', value: 'loose' },
+            ]}
+          />
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  );
+}
+
 function ResumeBuilder() {
   const { data, template, design, activeStep, setActiveStep, resetData } = useResume();
   const resumeRef = useRef<HTMLDivElement>(null);
