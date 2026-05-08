@@ -1,4 +1,4 @@
-import { DesignSettings } from '@/contexts/ResumeContext';
+import { DesignSettings, FontWeight, TextTransform, LetterSpacing, LineHeightPreset } from '@/contexts/ResumeContext';
 import { Skill } from '@/types/resume';
 import { formatDate as fmtDate } from '@/lib/resumeFormat';
 
@@ -58,4 +58,54 @@ export function SkillsList({ skills, design, className = '', textColor = '' }: {
       {names.map(n => <li key={n}>{n}</li>)}
     </ul>
   );
+}
+
+/* ---------- Advanced design CSS injection ---------- */
+
+const WEIGHT_MAP: Record<FontWeight, number> = {
+  thin: 100, extralight: 200, light: 300, regular: 400,
+  medium: 500, semibold: 600, bold: 700, extrabold: 800,
+};
+const TRANSFORM_MAP: Record<TextTransform, string> = {
+  none: 'none', uppercase: 'uppercase', lowercase: 'lowercase',
+  capitalize: 'capitalize', 'small-caps': 'none', // small-caps via font-variant
+};
+const SPACING_MAP: Record<LetterSpacing, string> = {
+  tight: '-0.02em', normal: '0', wide: '0.05em', extrawide: '0.12em',
+};
+const LH_MAP: Record<LineHeightPreset, number> = {
+  compact: 1.1, normal: 1.4, relaxed: 1.6, loose: 1.9,
+};
+
+export function AdvancedDesignStyles({ design, scopeId }: { design?: DesignSettings; scopeId: string }) {
+  if (!design) return null;
+  const t = design.textSizes;
+  const w = design.textWeights;
+  const tr = design.textTransforms;
+  const ls = SPACING_MAP[design.letterSpacing] ?? '0';
+  const baseLH = LH_MAP[design.lineHeightPreset] ?? design.lineHeight;
+  const sc = (k: TextTransform) => k === 'small-caps' ? 'small-caps' : 'normal';
+  const css = `
+[data-resume-scope="${scopeId}"] { letter-spacing: ${ls}; line-height: ${baseLH}; font-size: ${t.bodyCopy}pt; }
+[data-resume-scope="${scopeId}"] p, [data-resume-scope="${scopeId}"] li, [data-resume-scope="${scopeId}"] div:not(:has(> *)) {
+  font-size: ${t.bodyCopy}pt; font-weight: ${WEIGHT_MAP[w.bodyCopy]}; text-transform: ${TRANSFORM_MAP[tr.bodyCopy]}; font-variant: ${sc(tr.bodyCopy)};
+}
+[data-resume-scope="${scopeId}"] h1 {
+  font-size: ${t.fullName}pt !important; font-weight: ${WEIGHT_MAP[w.fullName]} !important;
+  text-transform: ${TRANSFORM_MAP[tr.fullName]} !important; font-variant: ${sc(tr.fullName)};
+}
+[data-resume-scope="${scopeId}"] h2 {
+  font-size: ${t.sectionTitle}pt !important; font-weight: ${WEIGHT_MAP[w.sectionTitle]} !important;
+  text-transform: ${TRANSFORM_MAP[tr.sectionTitle]} !important; font-variant: ${sc(tr.sectionTitle)};
+}
+[data-resume-scope="${scopeId}"] h3, [data-resume-scope="${scopeId}"] .role, [data-resume-scope="${scopeId}"] .font-bold {
+  font-size: ${t.primaryHeading}pt; font-weight: ${WEIGHT_MAP[w.primaryHeading]};
+  text-transform: ${TRANSFORM_MAP[tr.primaryHeading]}; font-variant: ${sc(tr.primaryHeading)};
+}
+[data-resume-scope="${scopeId}"] .text-\\[10px\\], [data-resume-scope="${scopeId}"] .text-\\[9px\\], [data-resume-scope="${scopeId}"] .text-\\[9\\.5px\\] {
+  font-size: ${t.minorCopy}pt !important; font-weight: ${WEIGHT_MAP[w.minorCopy]};
+  text-transform: ${TRANSFORM_MAP[tr.minorCopy]}; font-variant: ${sc(tr.minorCopy)};
+}
+`;
+  return <style dangerouslySetInnerHTML={{ __html: css }} />;
 }

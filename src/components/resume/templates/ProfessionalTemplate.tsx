@@ -30,20 +30,25 @@ export function ProfessionalTemplate({ data, accentColor, design }: TemplateProp
         {experience.length > 0 && (
           <div>
             <h2 className="text-xs font-bold uppercase tracking-wider pb-1 border-b-2 mb-3" style={{ color: accentColor, borderColor: accentColor }}>Professional Experience</h2>
-            {experience.map(exp => (
-              <div key={exp.id} className="mb-3">
-                <div className="flex justify-between">
-                  <div>
-                    <span className="font-bold text-sm">{exp.role}</span>
-                    <span className="text-gray-500"> | {exp.company}</span>
-                  </div>
-                  <span className="text-[10px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{dateRange(exp.startDate, exp.endDate, exp.current, design)}</span>
+            {experience.map(exp => {
+              const dateEl = <span className="text-[10px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{dateRange(exp.startDate, exp.endDate, exp.current, design)}</span>;
+              const titleEl = (
+                <div>
+                  <span className="font-bold text-sm">{exp.role}</span>
+                  <span className="text-gray-500"> | {exp.company}</span>
                 </div>
-                <ul className="list-disc list-inside mt-1 text-gray-700" style={{ lineHeight: d.listLineHeight }}>
-                  {exp.bullets.filter(b => b).map((b, i) => <li key={i}>{b}</li>)}
-                </ul>
-              </div>
-            ))}
+              );
+              return (
+                <div key={exp.id} className="mb-3">
+                  <div className="flex justify-between items-start">
+                    {d.dateAlign === 'left' ? <>{dateEl}{titleEl}</> : <>{titleEl}{dateEl}</>}
+                  </div>
+                  <ul className="list-disc list-inside mt-1 text-gray-700" style={{ lineHeight: d.listLineHeight }}>
+                    {exp.bullets.filter(b => b).map((b, i) => <li key={i}>{b}</li>)}
+                  </ul>
+                </div>
+              );
+            })}
           </div>
         )}
 
