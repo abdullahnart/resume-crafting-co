@@ -5,21 +5,57 @@ export type DateFormat = 'numbers' | 'monthYear' | 'fullDate';
 export type Align = 'left' | 'center' | 'right';
 export type SkillsLayout = 'comma' | 'commaList' | 'columns';
 export type PaperSize = 'a4' | 'letter';
+export type FontWeight = 'thin' | 'extralight' | 'light' | 'regular' | 'medium' | 'semibold' | 'bold' | 'extrabold';
+export type TextTransform = 'none' | 'uppercase' | 'lowercase' | 'capitalize' | 'small-caps';
+export type LetterSpacing = 'tight' | 'normal' | 'wide' | 'extrawide';
+export type LineHeightPreset = 'compact' | 'normal' | 'relaxed' | 'loose';
+
+export interface TextSizes {
+  fullName: number;
+  sectionTitle: number;
+  primaryHeading: number;
+  secondaryHeading: number;
+  bodyCopy: number;
+  minorCopy: number;
+  contactInfo: number;
+}
+export interface TextWeights {
+  fullName: FontWeight;
+  sectionTitle: FontWeight;
+  primaryHeading: FontWeight;
+  secondaryHeading: FontWeight;
+  bodyCopy: FontWeight;
+  minorCopy: FontWeight;
+}
+export interface TextTransforms {
+  fullName: TextTransform;
+  sectionTitle: TextTransform;
+  primaryHeading: TextTransform;
+  secondaryHeading: TextTransform;
+  bodyCopy: TextTransform;
+  minorCopy: TextTransform;
+}
 
 export interface DesignSettings {
   fontFamily: string;
-  lineHeight: number;        // 1.0 – 1.5 (100%-150%)
-  listLineHeight: number;    // 1.2 – 1.8
+  lineHeight: number;
+  listLineHeight: number;
   accentColor: string;
   dateFormat: DateFormat;
-  headerAlign: Align;        // left | center | right
+  headerAlign: Align;
   dateAlign: 'left' | 'right';
   locationAlign: 'left' | 'right';
   skillsLayout: SkillsLayout;
-  skillsColumns: number;     // 1 – 4
+  skillsColumns: number;
   paperSize: PaperSize;
-  marginX: number;           // inches 0.3 – 1
+  marginX: number;
   marginY: number;
+  // Advanced
+  textSizes: TextSizes;
+  textWeights: TextWeights;
+  textTransforms: TextTransforms;
+  letterSpacing: LetterSpacing;
+  lineHeightPreset: LineHeightPreset;
 }
 
 const defaultDesign: DesignSettings = {
@@ -36,6 +72,33 @@ const defaultDesign: DesignSettings = {
   paperSize: 'a4',
   marginX: 0.6,
   marginY: 0.6,
+  textSizes: {
+    fullName: 18,
+    sectionTitle: 10,
+    primaryHeading: 11,
+    secondaryHeading: 11,
+    bodyCopy: 10,
+    minorCopy: 10,
+    contactInfo: 10,
+  },
+  textWeights: {
+    fullName: 'bold',
+    sectionTitle: 'bold',
+    primaryHeading: 'semibold',
+    secondaryHeading: 'regular',
+    bodyCopy: 'regular',
+    minorCopy: 'light',
+  },
+  textTransforms: {
+    fullName: 'none',
+    sectionTitle: 'uppercase',
+    primaryHeading: 'none',
+    secondaryHeading: 'none',
+    bodyCopy: 'none',
+    minorCopy: 'none',
+  },
+  letterSpacing: 'normal',
+  lineHeightPreset: 'normal',
 };
 
 interface ResumeContextType {
