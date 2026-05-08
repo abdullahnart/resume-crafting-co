@@ -6,6 +6,7 @@ import { CreativeTemplate } from './templates/CreativeTemplate';
 import { ProfessionalTemplate } from './templates/ProfessionalTemplate';
 import { CompactTemplate } from './templates/CompactTemplate';
 import { DesignSettings } from '@/contexts/ResumeContext';
+import { AdvancedDesignStyles } from '@/lib/templateHelpers';
 
 interface Props {
   template: TemplateName;
@@ -25,5 +26,10 @@ const templates: Record<TemplateName, React.ComponentType<{ data: ResumeData; ac
 
 export function TemplateRenderer({ template, data, accentColor, design }: Props) {
   const Component = templates[template];
-  return <Component data={data} accentColor={accentColor} design={design} />;
+  return (
+    <div data-resume-scope="resume">
+      <AdvancedDesignStyles design={design} scopeId="resume" />
+      <Component data={data} accentColor={accentColor} design={design} />
+    </div>
+  );
 }
