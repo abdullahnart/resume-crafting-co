@@ -1,17 +1,19 @@
 import { TemplateProps } from '@/types/resume';
+import { getDesign, dateRange, alignClass, fmt, SkillsList } from '@/lib/templateHelpers';
 
-export function CompactTemplate({ data, accentColor }: TemplateProps) {
+export function CompactTemplate({ data, accentColor, design }: TemplateProps) {
   const { personalInfo: p, summary, experience, education, skills, languages, certifications, projects } = data;
+  const d = getDesign(design);
+  const headerJustify = d.headerAlign === 'left' ? 'justify-start' : d.headerAlign === 'right' ? 'justify-end' : 'justify-center';
 
   return (
-    <div className="text-[9.5px] leading-snug text-gray-900 p-5" style={{ fontFamily: "'Source Sans 3', sans-serif" }}>
-      {/* Compact header */}
-      <div className="flex justify-between items-start border-b pb-2 mb-2" style={{ borderColor: accentColor }}>
-        <div>
+    <div className="text-[9.5px] text-gray-900" style={{ lineHeight: d.lineHeight }}>
+      <div className={`flex ${headerJustify} items-start border-b pb-2 mb-2 gap-4`} style={{ borderColor: accentColor }}>
+        <div className={alignClass(d.headerAlign)}>
           <h1 className="text-lg font-bold" style={{ color: accentColor }}>{p.fullName || 'Your Name'}</h1>
           {p.jobTitle && <p className="text-xs text-gray-500">{p.jobTitle}</p>}
         </div>
-        <div className="text-right text-[9px] text-gray-500 space-y-0.5">
+        <div className="text-right text-[9px] text-gray-500 space-y-0.5 ml-auto">
           {p.email && <p>{p.email}</p>}
           {p.phone && <p>{p.phone}</p>}
           {p.location && <p>{p.location}</p>}
@@ -28,10 +30,10 @@ export function CompactTemplate({ data, accentColor }: TemplateProps) {
             <div key={exp.id} className="mb-1.5">
               <div className="flex justify-between">
                 <span><span className="font-semibold">{exp.role}</span> · {exp.company}</span>
-                <span className="text-gray-400">{exp.startDate}–{exp.current ? 'Present' : exp.endDate}</span>
+                <span className="text-gray-400">{dateRange(exp.startDate, exp.endDate, exp.current, design)}</span>
               </div>
               {exp.bullets.filter(b => b).length > 0 && (
-                <ul className="list-disc list-inside text-gray-600 ml-2">
+                <ul className="list-disc list-inside text-gray-600 ml-2" style={{ lineHeight: d.listLineHeight }}>
                   {exp.bullets.filter(b => b).map((b, i) => <li key={i}>{b}</li>)}
                 </ul>
               )}
@@ -47,7 +49,7 @@ export function CompactTemplate({ data, accentColor }: TemplateProps) {
             {education.map(edu => (
               <div key={edu.id} className="mb-1">
                 <div className="font-semibold">{edu.degree} {edu.field && `in ${edu.field}`}</div>
-                <div className="text-gray-500">{edu.school} · {edu.startDate}–{edu.endDate}</div>
+                <div className="text-gray-500">{edu.school} · {dateRange(edu.startDate, edu.endDate, false, design)}</div>
               </div>
             ))}
           </div>
@@ -57,9 +59,7 @@ export function CompactTemplate({ data, accentColor }: TemplateProps) {
           {skills.length > 0 && (
             <div className="mb-2">
               <h2 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: accentColor }}>Skills</h2>
-              <ul className="list-disc list-inside text-gray-600 space-y-0.5">
-                {skills.map(s => s.name).filter(Boolean).map(name => <li key={name}>{name}</li>)}
-              </ul>
+              <SkillsList skills={skills} design={design} textColor="text-gray-600" />
             </div>
           )}
 
@@ -75,7 +75,7 @@ export function CompactTemplate({ data, accentColor }: TemplateProps) {
       {certifications.length > 0 && (
         <div className="mb-2">
           <h2 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: accentColor }}>Certifications</h2>
-          <p className="text-gray-600">{certifications.map(c => c.name).join(' • ')}</p>
+          <p className="text-gray-600">{certifications.map(c => `${c.name}${c.date ? ` (${fmt(c.date, design)})` : ''}`).join(' • ')}</p>
         </div>
       )}
 

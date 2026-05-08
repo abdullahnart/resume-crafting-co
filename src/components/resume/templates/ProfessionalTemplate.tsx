@@ -1,15 +1,16 @@
 import { TemplateProps } from '@/types/resume';
+import { getDesign, dateRange, alignClass, fmt, SkillsList } from '@/lib/templateHelpers';
 
-export function ProfessionalTemplate({ data, accentColor }: TemplateProps) {
+export function ProfessionalTemplate({ data, accentColor, design }: TemplateProps) {
   const { personalInfo: p, summary, experience, education, skills, languages, certifications, projects } = data;
+  const d = getDesign(design);
 
   return (
-    <div className="text-[11px] leading-relaxed text-gray-900" style={{ fontFamily: "'Source Sans 3', sans-serif" }}>
-      {/* Dark header block */}
-      <div className="p-6 text-white" style={{ backgroundColor: accentColor }}>
+    <div className="text-[11px] text-gray-900" style={{ lineHeight: d.lineHeight }}>
+      <div className={`p-6 text-white ${alignClass(d.headerAlign)}`} style={{ backgroundColor: accentColor }}>
         <h1 className="text-2xl font-bold">{p.fullName || 'Your Name'}</h1>
         {p.jobTitle && <p className="text-sm opacity-90 mt-0.5">{p.jobTitle}</p>}
-        <div className="grid grid-cols-3 gap-2 mt-3 text-[10px] opacity-80">
+        <div className="grid grid-cols-3 gap-2 mt-3 text-[10px] opacity-80 text-left">
           {p.email && <span>✉ {p.email}</span>}
           {p.phone && <span>☎ {p.phone}</span>}
           {p.location && <span>📍 {p.location}</span>}
@@ -36,9 +37,9 @@ export function ProfessionalTemplate({ data, accentColor }: TemplateProps) {
                     <span className="font-bold text-sm">{exp.role}</span>
                     <span className="text-gray-500"> | {exp.company}</span>
                   </div>
-                  <span className="text-[10px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{exp.startDate} — {exp.current ? 'Present' : exp.endDate}</span>
+                  <span className="text-[10px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{dateRange(exp.startDate, exp.endDate, exp.current, design)}</span>
                 </div>
-                <ul className="list-disc list-inside mt-1 text-gray-700">
+                <ul className="list-disc list-inside mt-1 text-gray-700" style={{ lineHeight: d.listLineHeight }}>
                   {exp.bullets.filter(b => b).map((b, i) => <li key={i}>{b}</li>)}
                 </ul>
               </div>
@@ -54,7 +55,7 @@ export function ProfessionalTemplate({ data, accentColor }: TemplateProps) {
                 <div key={edu.id} className="mb-2">
                   <div className="font-bold">{edu.degree} {edu.field && `in ${edu.field}`}</div>
                   <div className="text-gray-500">{edu.school}</div>
-                  <div className="text-[10px] text-gray-400">{edu.startDate} — {edu.endDate}{edu.gpa && ` | GPA: ${edu.gpa}`}</div>
+                  <div className="text-[10px] text-gray-400">{dateRange(edu.startDate, edu.endDate, false, design)}{edu.gpa && ` | GPA: ${edu.gpa}`}</div>
                 </div>
               ))}
             </div>
@@ -64,9 +65,7 @@ export function ProfessionalTemplate({ data, accentColor }: TemplateProps) {
             {skills.length > 0 && (
               <div>
                 <h2 className="text-xs font-bold uppercase tracking-wider pb-1 border-b-2 mb-2" style={{ color: accentColor, borderColor: accentColor }}>Skills</h2>
-                <ul className="list-disc list-inside text-gray-700 space-y-0.5">
-                  {skills.map(s => <li key={s.id}>{s.name}</li>)}
-                </ul>
+                <SkillsList skills={skills} design={design} textColor="text-gray-700" />
               </div>
             )}
 
@@ -83,7 +82,7 @@ export function ProfessionalTemplate({ data, accentColor }: TemplateProps) {
           <div>
             <h2 className="text-xs font-bold uppercase tracking-wider pb-1 border-b-2 mb-2" style={{ color: accentColor, borderColor: accentColor }}>Certifications</h2>
             <div className="grid grid-cols-2 gap-1">
-              {certifications.map(c => <p key={c.id}>{c.name} — {c.issuer} ({c.date})</p>)}
+              {certifications.map(c => <p key={c.id}>{c.name} — {c.issuer} ({fmt(c.date, design)})</p>)}
             </div>
           </div>
         )}
