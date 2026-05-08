@@ -373,10 +373,16 @@ function ResumeBuilder() {
               <Tabs defaultValue="presentation" className="flex-1 flex flex-col overflow-hidden">
                 <TabsList className="rounded-none w-full justify-start bg-muted/40 border-b px-2 py-1 gap-1 h-auto">
                   <TabsTrigger value="presentation" className="text-xs data-[state=active]:bg-background">Presentation</TabsTrigger>
+                  <TabsTrigger value="advanced" className="text-xs data-[state=active]:bg-background">Advanced</TabsTrigger>
                 </TabsList>
                 <TabsContent value="presentation" className="flex-1 mt-0 overflow-hidden data-[state=inactive]:hidden">
                   <ScrollArea className="h-full p-4">
                     <PresentationPanel />
+                  </ScrollArea>
+                </TabsContent>
+                <TabsContent value="advanced" className="flex-1 mt-0 overflow-hidden data-[state=inactive]:hidden">
+                  <ScrollArea className="h-full p-4">
+                    <AdvancedPanel />
                   </ScrollArea>
                 </TabsContent>
               </Tabs>
