@@ -380,12 +380,36 @@ function ResumeBuilder() {
     setDownloading(true);
     try {
       const canvas = await html2canvas(resumeRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
-      const imgData = canvas.toDataURL('image/png');
       const fmt = design.paperSize === 'letter' ? 'letter' : 'a4';
       const pdf = new jsPDF('p', 'mm', fmt);
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgFullHeightMm = (canvas.height * pdfWidth) / canvas.width;
+
+      if (imgFullHeightMm <= pdfHeight + 0.5) {
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, imgFullHeightMm);
+      } else {
+        const pxPerMm = canvas.width / pdfWidth;
+        const pageHeightPx = Math.floor(pdfHeight * pxPerMm);
+        let renderedPx = 0;
+        let pageIndex = 0;
+        while (renderedPx < canvas.height) {
+          const sliceHeightPx = Math.min(pageHeightPx, canvas.height - renderedPx);
+          const pageCanvas = document.createElement('canvas');
+          pageCanvas.width = canvas.width;
+          pageCanvas.height = sliceHeightPx;
+          const ctx = pageCanvas.getContext('2d');
+          if (!ctx) break;
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+          ctx.drawImage(canvas, 0, renderedPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+          const sliceHeightMm = (sliceHeightPx * pdfWidth) / canvas.width;
+          if (pageIndex > 0) pdf.addPage();
+          pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, sliceHeightMm);
+          renderedPx += sliceHeightPx;
+          pageIndex++;
+        }
+      }
       pdf.save(`${data.personalInfo.fullName || 'resume'}.pdf`);
     } catch (err) {
       console.error('PDF generation failed:', err);
