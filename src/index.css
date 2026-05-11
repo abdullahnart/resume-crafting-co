@@ -103,23 +103,3 @@
     display: none !important;
   }
 }
-
-/* Resume bullet rendering — html2canvas does not render native list-style markers reliably,
-   so we draw bullets via ::before for consistent alignment in the exported PDF. */
-[data-resume-scope="resume"] ul.list-disc {
-  list-style: none !important;
-  padding-left: 0 !important;
-  margin-left: 0 !important;
-}
-[data-resume-scope="resume"] ul.list-disc > li {
-  position: relative;
-  padding-left: 1em;
-  list-style: none !important;
-}
-[data-resume-scope="resume"] ul.list-disc > li::before {
-  content: "•";
-  position: absolute;
-  left: 0;
-  top: 0;
-  line-height: inherit;
-}
