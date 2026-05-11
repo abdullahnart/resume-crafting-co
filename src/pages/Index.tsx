@@ -56,11 +56,21 @@ function getPdfBreakpoints(source: HTMLElement, canvasHeight: number) {
     : Array.from(source.querySelectorAll<HTMLElement>('h1, h2, p, ul, li, div')).filter(el => el.children.length === 0 || ['H1', 'H2', 'P', 'UL', 'LI'].includes(el.tagName));
 
   const breakpoints = new Set<number>([canvasHeight]);
+  const protectedRanges = candidates.map(el => {
+    const rect = el.getBoundingClientRect();
+    return {
+      top: Math.round((rect.top - sourceRect.top) * cssToCanvas),
+      bottom: Math.round((rect.bottom - sourceRect.top) * cssToCanvas),
+    };
+  }).filter(range => range.bottom > range.top);
+
+  const isSafeBreak = (y: number) => !protectedRanges.some(range => y > range.top + 3 && y < range.bottom - 3);
+
   candidates.forEach(el => {
     const rect = el.getBoundingClientRect();
     if (rect.height <= 0) return;
     const bottomPx = Math.round((rect.bottom - sourceRect.top) * cssToCanvas);
-    if (bottomPx > 0 && bottomPx <= canvasHeight) breakpoints.add(bottomPx);
+    if (bottomPx > 0 && bottomPx <= canvasHeight && isSafeBreak(bottomPx)) breakpoints.add(bottomPx);
   });
 
   return Array.from(breakpoints).sort((a, b) => a - b);
