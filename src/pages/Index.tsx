@@ -419,39 +419,30 @@ function ResumeBuilder() {
     setDownloading(true);
     try {
       const source = resumeRef.current;
-      const SCALE = 2;
-      const canvas = await html2canvas(source, { scale: SCALE, useCORS: true, backgroundColor: '#ffffff' });
+      await document.fonts?.ready;
+      const canvas = await html2canvas(source, {
+        scale: PDF_EXPORT_SCALE,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        windowWidth: source.scrollWidth,
+        windowHeight: source.scrollHeight,
+      });
       const fmt = design.paperSize === 'letter' ? 'letter' : 'a4';
-      const pdf = new jsPDF('p', 'mm', fmt);
+      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: fmt, compress: true });
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       const pxPerMm = canvas.width / pdfWidth;
-      const pageHeightPx = Math.floor(pdfHeight * pxPerMm);
+      const pageHeightPx = Math.floor(pdfHeight * pxPerMm) - 2;
       const imgFullHeightMm = (canvas.height * pdfWidth) / canvas.width;
 
       if (imgFullHeightMm <= pdfHeight + 0.5) {
-        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, imgFullHeightMm);
+        pdf.addImage(canvas.toDataURL('image/jpeg', PDF_JPEG_QUALITY), 'JPEG', 0, 0, pdfWidth, imgFullHeightMm, undefined, 'FAST');
       } else {
-        // Build sorted list of safe break Y-positions (in canvas px) from leaf-ish descendants:
-        // we use the *bottom* of each block element so we never cut through a line/bullet.
-        const sourceRect = source.getBoundingClientRect();
-        const cssToCanvas = canvas.height / sourceRect.height; // accounts for actual rendered scale
-        const breakpoints = new Set<number>();
-        const all = source.querySelectorAll<HTMLElement>('*');
-        all.forEach(el => {
-          const tag = el.tagName;
-          // Skip inline-only elements (spans, anchors) — their bottoms are noisy.
-          if (tag === 'SPAN' || tag === 'A' || tag === 'STRONG' || tag === 'EM' || tag === 'B' || tag === 'I') return;
-          const r = el.getBoundingClientRect();
-          if (r.height === 0) return;
-          const bottomPx = (r.bottom - sourceRect.top) * cssToCanvas;
-          if (bottomPx > 0 && bottomPx <= canvas.height) breakpoints.add(Math.round(bottomPx));
-        });
-        breakpoints.add(canvas.height);
-        const breaks = Array.from(breakpoints).sort((a, b) => a - b);
-
+        const breaks = getPdfBreakpoints(source, canvas.height);
         let renderedPx = 0;
         let pageIndex = 0;
+        const minProgressPx = Math.round(24 * PDF_EXPORT_SCALE);
         while (renderedPx < canvas.height) {
           const remaining = canvas.height - renderedPx;
           let sliceEnd: number;
@@ -465,21 +456,9 @@ function ResumeBuilder() {
               if (bp > renderedPx && bp <= pageLimit) candidate = bp;
               else if (bp > pageLimit) break;
             }
-            // fallback if no break fits (e.g. one giant element): hard slice at pageLimit
-            sliceEnd = candidate > renderedPx ? candidate : pageLimit;
+            sliceEnd = candidate - renderedPx >= minProgressPx ? candidate : pageLimit;
           }
-          const sliceHeightPx = sliceEnd - renderedPx;
-          const pageCanvas = document.createElement('canvas');
-          pageCanvas.width = canvas.width;
-          pageCanvas.height = sliceHeightPx;
-          const ctx = pageCanvas.getContext('2d');
-          if (!ctx) break;
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-          ctx.drawImage(canvas, 0, renderedPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
-          const sliceHeightMm = (sliceHeightPx * pdfWidth) / canvas.width;
-          if (pageIndex > 0) pdf.addPage();
-          pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, sliceHeightMm);
+          addCanvasSliceToPdf(pdf, canvas, renderedPx, Math.min(sliceEnd, canvas.height), pdfWidth, pageIndex);
           renderedPx = sliceEnd;
           pageIndex++;
         }
