@@ -29,7 +29,7 @@ export function ClassicTemplate({ data, accentColor, design }: TemplateProps) {
       )}
 
       {experience.length > 0 && (
-        <div className="mb-4">
+        <div data-pdf-section className="mb-4">
           <h2 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>Experience</h2>
           {experience.map(exp => {
             const dateEl = <span className="text-gray-500 text-[10px]">{dateRange(exp.startDate, exp.endDate, exp.current, design)}</span>;
@@ -52,7 +52,7 @@ export function ClassicTemplate({ data, accentColor, design }: TemplateProps) {
       )}
 
       {education.length > 0 && (
-        <div className="mb-4">
+        <div data-pdf-section className="mb-4">
           <h2 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>Education</h2>
           {education.map(edu => {
             const dateEl = <span className="text-gray-500 text-[10px]">{dateRange(edu.startDate, edu.endDate, false, design)}</span>;
@@ -70,7 +70,7 @@ export function ClassicTemplate({ data, accentColor, design }: TemplateProps) {
       )}
 
       {skills.length > 0 && (
-        <div className="mb-4">
+        <div data-pdf-section className="mb-4">
           <h2 className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: accentColor }}>Skills</h2>
           <SkillsList skills={skills} design={design} textColor="text-gray-700" />
         </div>
@@ -96,7 +96,7 @@ export function ClassicTemplate({ data, accentColor, design }: TemplateProps) {
         <div className="mb-4">
           <h2 className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: accentColor }}>Projects</h2>
           {projects.map(proj => (
-            <div key={proj.id} className="mb-1">
+            <div key={proj.id} data-pdf-section className="mb-1">
               <a href={proj.url} target="_blank" rel="noreferrer" className="font-bold underline underline-offset-2">
                 {proj.name}
               </a>
