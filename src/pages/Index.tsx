@@ -44,6 +44,45 @@ const PAPER: Record<string, { wMm: number; hMm: number }> = {
   letter: { wMm: 215.9, hMm: 279.4 },
 };
 
+const PDF_EXPORT_SCALE = 1.45;
+const PDF_JPEG_QUALITY = 0.82;
+
+function getPdfBreakpoints(source: HTMLElement, canvasHeight: number) {
+  const sourceRect = source.getBoundingClientRect();
+  const cssToCanvas = canvasHeight / sourceRect.height;
+  const sections = Array.from(source.querySelectorAll<HTMLElement>('[data-pdf-section]'));
+  const candidates = sections.length > 0
+    ? sections
+    : Array.from(source.querySelectorAll<HTMLElement>('h1, h2, p, ul, li, div')).filter(el => el.children.length === 0 || ['H1', 'H2', 'P', 'UL', 'LI'].includes(el.tagName));
+
+  const breakpoints = new Set<number>([canvasHeight]);
+  candidates.forEach(el => {
+    const rect = el.getBoundingClientRect();
+    if (rect.height <= 0) return;
+    const bottomPx = Math.round((rect.bottom - sourceRect.top) * cssToCanvas);
+    if (bottomPx > 0 && bottomPx <= canvasHeight) breakpoints.add(bottomPx);
+  });
+
+  return Array.from(breakpoints).sort((a, b) => a - b);
+}
+
+function addCanvasSliceToPdf(pdf: jsPDF, canvas: HTMLCanvasElement, startPx: number, endPx: number, pdfWidth: number, pageIndex: number) {
+  const sliceHeightPx = Math.max(1, endPx - startPx);
+  const pageCanvas = document.createElement('canvas');
+  pageCanvas.width = canvas.width;
+  pageCanvas.height = sliceHeightPx;
+  const ctx = pageCanvas.getContext('2d', { alpha: false });
+  if (!ctx) return;
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+  ctx.drawImage(canvas, 0, startPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+
+  const sliceHeightMm = (sliceHeightPx * pdfWidth) / canvas.width;
+  if (pageIndex > 0) pdf.addPage();
+  pdf.addImage(pageCanvas.toDataURL('image/jpeg', PDF_JPEG_QUALITY), 'JPEG', 0, 0, pdfWidth, sliceHeightMm, undefined, 'FAST');
+}
+
 const STEPS = [
   { label: 'Personal', component: PersonalInfoForm },
   { label: 'Summary', component: SummaryForm },
