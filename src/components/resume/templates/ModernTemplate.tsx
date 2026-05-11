@@ -8,7 +8,7 @@ export function ModernTemplate({ data, accentColor, design }: TemplateProps) {
   return (
     <div className="flex text-[11px] min-h-full" style={{ lineHeight: d.lineHeight }}>
       <div className="w-[35%] p-5 text-white" style={{ backgroundColor: accentColor }}>
-        <h1 className="text-xl font-bold mb-1">{p.fullName || 'Your Name'}</h1>
+        <h1 data-pdf-section className="text-xl font-bold mb-1">{p.fullName || 'Your Name'}</h1>
         {p.jobTitle && <p className="text-sm opacity-90 mb-4">{p.jobTitle}</p>}
 
         <div className="space-y-1 text-[10px] opacity-80 mb-6">
@@ -20,14 +20,14 @@ export function ModernTemplate({ data, accentColor, design }: TemplateProps) {
         </div>
 
         {skills.length > 0 && (
-          <div className="mb-5">
+          <div data-pdf-section className="mb-5">
             <h2 className="text-xs font-bold uppercase tracking-wider border-b border-white/30 pb-1 mb-2">Skills</h2>
             <SkillsList skills={skills} design={design} className="text-[10px]" />
           </div>
         )}
 
         {languages.length > 0 && (
-          <div className="mb-5">
+          <div data-pdf-section className="mb-5">
             <h2 className="text-xs font-bold uppercase tracking-wider border-b border-white/30 pb-1 mb-2">Languages</h2>
             {languages.map(l => (
               <p key={l.id}>{l.name}{l.proficiency && ` — ${l.proficiency}`}</p>
@@ -36,7 +36,7 @@ export function ModernTemplate({ data, accentColor, design }: TemplateProps) {
         )}
 
         {certifications.length > 0 && (
-          <div>
+            <div data-pdf-section>
             <h2 className="text-xs font-bold uppercase tracking-wider border-b border-white/30 pb-1 mb-2">Certifications</h2>
             {certifications.map(c => (
               <p key={c.id} className="mb-1">{c.name}{c.date && ` (${fmt(c.date, design)})`}</p>
@@ -50,7 +50,7 @@ export function ModernTemplate({ data, accentColor, design }: TemplateProps) {
           {/* (header lives in sidebar; this maintains alignment for top section if needed) */}
         </div>
         {summary && (
-          <div className="mb-5">
+          <div data-pdf-section className="mb-5">
             <h2 className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: accentColor }}>Profile</h2>
             <p className="text-gray-700">{summary}</p>
           </div>
@@ -60,7 +60,7 @@ export function ModernTemplate({ data, accentColor, design }: TemplateProps) {
           <div className="mb-5">
             <h2 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>Experience</h2>
             {experience.map(exp => (
-              <div key={exp.id} className="mb-3">
+              <div key={exp.id} data-pdf-section className="mb-3">
                 <div className="flex justify-between">
                   {d.dateAlign === 'left' ? (
                     <>
@@ -87,7 +87,7 @@ export function ModernTemplate({ data, accentColor, design }: TemplateProps) {
           <div className="mb-5">
             <h2 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>Education</h2>
             {education.map(edu => (
-              <div key={edu.id} className="mb-2">
+              <div key={edu.id} data-pdf-section className="mb-2">
                 <div className="font-bold">{edu.degree} {edu.field && `in ${edu.field}`}</div>
                 <div className="text-gray-500 text-[10px]">{edu.school} | {dateRange(edu.startDate, edu.endDate, false, design)}{edu.gpa && ` | GPA: ${edu.gpa}`}</div>
               </div>
@@ -99,7 +99,7 @@ export function ModernTemplate({ data, accentColor, design }: TemplateProps) {
           <div>
             <h2 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>Projects</h2>
             {projects.map(proj => (
-              <div key={proj.id} className="mb-2">
+              <div key={proj.id} data-pdf-section className="mb-2">
                 <a href={proj.url} target="_blank" rel="noreferrer" className="font-bold underline underline-offset-2">
                   {proj.name}
                 </a>
