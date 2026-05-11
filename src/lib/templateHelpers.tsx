@@ -86,10 +86,6 @@ export function AdvancedDesignStyles({ design, scopeId }: { design?: DesignSetti
   const baseLH = LH_MAP[design.lineHeightPreset] ?? design.lineHeight;
   const sc = (k: TextTransform) => k === 'small-caps' ? 'small-caps' : 'normal';
   const css = `
-[data-resume-scope="${scopeId}"] ul { padding-left: 1.1em !important; list-style-position: outside !important; margin-left: 0 !important; }
-[data-resume-scope="${scopeId}"] ul li { padding-left: 0.15em; text-indent: 0; }
-[data-resume-scope="${scopeId}"] ol { padding-left: 1.3em !important; list-style-position: outside !important; }
-
 [data-resume-scope="${scopeId}"] { letter-spacing: ${ls}; line-height: ${baseLH}; font-size: ${t.bodyCopy}pt; }
 [data-resume-scope="${scopeId}"] p, [data-resume-scope="${scopeId}"] li, [data-resume-scope="${scopeId}"] div:not(:has(> *)) {
   font-size: ${t.bodyCopy}pt; font-weight: ${WEIGHT_MAP[w.bodyCopy]}; text-transform: ${TRANSFORM_MAP[tr.bodyCopy]}; font-variant: ${sc(tr.bodyCopy)};

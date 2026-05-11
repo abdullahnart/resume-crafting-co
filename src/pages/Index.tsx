@@ -379,40 +379,9 @@ function ResumeBuilder() {
     if (!resumeRef.current) return;
     setDownloading(true);
     try {
-      const root = resumeRef.current;
-      const SCALE = 2;
-
-      // Collect safe break Y positions (in canvas pixels) from leaf-ish elements
-      // so we never slice through a line of text or a bullet.
-      const rootRect = root.getBoundingClientRect();
-      const breakPoints = new Set<number>([0]);
-      const blockTags = new Set(['LI', 'P', 'H1', 'H2', 'H3', 'H4', 'TR', 'IMG']);
-      const all = root.querySelectorAll('*');
-      all.forEach((el) => {
-        const node = el as HTMLElement;
-        const tag = node.tagName;
-        const isLeafBlock =
-          blockTags.has(tag) ||
-          (node.children.length === 0 && (node.textContent || '').trim().length > 0);
-        if (!isLeafBlock) return;
-        const r = node.getBoundingClientRect();
-        if (r.height === 0) return;
-        // Bottom edge is a safe break (after the element).
-        breakPoints.add(Math.round((r.bottom - rootRect.top) * SCALE));
-        // Top edge of block-level containers is also safe (before the element).
-        if (blockTags.has(tag) || node.tagName === 'DIV' || node.tagName === 'SECTION') {
-          breakPoints.add(Math.round((r.top - rootRect.top) * SCALE));
-        }
-      });
-
-      const canvas = await html2canvas(root, {
-        scale: SCALE,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-      });
-
-      const fmtSize = design.paperSize === 'letter' ? 'letter' : 'a4';
-      const pdf = new jsPDF('p', 'mm', fmtSize);
+      const canvas = await html2canvas(resumeRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const fmt = design.paperSize === 'letter' ? 'letter' : 'a4';
+      const pdf = new jsPDF('p', 'mm', fmt);
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       const imgFullHeightMm = (canvas.height * pdfWidth) / canvas.width;
@@ -422,30 +391,10 @@ function ResumeBuilder() {
       } else {
         const pxPerMm = canvas.width / pdfWidth;
         const pageHeightPx = Math.floor(pdfHeight * pxPerMm);
-        const minSlicePx = Math.floor(pageHeightPx * 0.5); // avoid tiny pages
-        const sortedBreaks = Array.from(breakPoints)
-          .filter((y) => y >= 0 && y <= canvas.height)
-          .sort((a, b) => a - b);
-
         let renderedPx = 0;
         let pageIndex = 0;
         while (renderedPx < canvas.height) {
-          const remaining = canvas.height - renderedPx;
-          let sliceHeightPx: number;
-          if (remaining <= pageHeightPx) {
-            sliceHeightPx = remaining;
-          } else {
-            const maxEnd = renderedPx + pageHeightPx;
-            // Find the largest safe break point <= maxEnd that gives a slice >= minSlicePx
-            let chosen = -1;
-            for (const bp of sortedBreaks) {
-              if (bp <= renderedPx + minSlicePx) continue;
-              if (bp > maxEnd) break;
-              chosen = bp;
-            }
-            sliceHeightPx = chosen > 0 ? chosen - renderedPx : pageHeightPx;
-          }
-
+          const sliceHeightPx = Math.min(pageHeightPx, canvas.height - renderedPx);
           const pageCanvas = document.createElement('canvas');
           pageCanvas.width = canvas.width;
           pageCanvas.height = sliceHeightPx;
