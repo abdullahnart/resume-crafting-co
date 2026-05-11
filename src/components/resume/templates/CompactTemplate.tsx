@@ -8,7 +8,7 @@ export function CompactTemplate({ data, accentColor, design }: TemplateProps) {
 
   return (
     <div className="text-[9.5px] text-gray-900" style={{ lineHeight: d.lineHeight }}>
-      <div className={`flex ${headerJustify} items-start border-b pb-2 mb-2 gap-4`} style={{ borderColor: accentColor }}>
+      <div data-pdf-section className={`flex ${headerJustify} items-start border-b pb-2 mb-2 gap-4`} style={{ borderColor: accentColor }}>
         <div className={alignClass(d.headerAlign)}>
           <h1 className="text-lg font-bold" style={{ color: accentColor }}>{p.fullName || 'Your Name'}</h1>
           {p.jobTitle && <p className="text-xs text-gray-500">{p.jobTitle}</p>}
@@ -21,7 +21,7 @@ export function CompactTemplate({ data, accentColor, design }: TemplateProps) {
         </div>
       </div>
 
-      {summary && <p className="text-gray-600 mb-2">{summary}</p>}
+      {summary && <p data-pdf-section className="text-gray-600 mb-2">{summary}</p>}
 
       {experience.length > 0 && (
         <div className="mb-2">
@@ -30,7 +30,7 @@ export function CompactTemplate({ data, accentColor, design }: TemplateProps) {
             const dateEl = <span className="text-gray-400">{dateRange(exp.startDate, exp.endDate, exp.current, design)}</span>;
             const titleEl = <span><span className="font-semibold">{exp.role}</span> · {exp.company}</span>;
             return (
-              <div key={exp.id} className="mb-1.5">
+              <div key={exp.id} data-pdf-section className="mb-1.5">
                 <div className="flex justify-between">
                   {d.dateAlign === 'left' ? <>{dateEl}{titleEl}</> : <>{titleEl}{dateEl}</>}
                 </div>
@@ -50,7 +50,7 @@ export function CompactTemplate({ data, accentColor, design }: TemplateProps) {
           <div className="mb-2">
             <h2 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: accentColor }}>Education</h2>
             {education.map(edu => (
-              <div key={edu.id} className="mb-1">
+              <div key={edu.id} data-pdf-section className="mb-1">
                 <div className="font-semibold">{edu.degree} {edu.field && `in ${edu.field}`}</div>
                 <div className="text-gray-500">{edu.school} · {dateRange(edu.startDate, edu.endDate, false, design)}</div>
               </div>
@@ -60,14 +60,14 @@ export function CompactTemplate({ data, accentColor, design }: TemplateProps) {
 
         <div>
           {skills.length > 0 && (
-            <div className="mb-2">
+            <div data-pdf-section className="mb-2">
               <h2 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: accentColor }}>Skills</h2>
               <SkillsList skills={skills} design={design} textColor="text-gray-600" />
             </div>
           )}
 
           {languages.length > 0 && (
-            <div className="mb-2">
+            <div data-pdf-section className="mb-2">
               <h2 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: accentColor }}>Languages</h2>
               <p className="text-gray-600">{languages.map(l => l.name).join(', ')}</p>
             </div>
@@ -76,7 +76,7 @@ export function CompactTemplate({ data, accentColor, design }: TemplateProps) {
       </div>
 
       {certifications.length > 0 && (
-        <div className="mb-2">
+        <div data-pdf-section className="mb-2">
           <h2 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: accentColor }}>Certifications</h2>
           <p className="text-gray-600">{certifications.map(c => `${c.name}${c.date ? ` (${fmt(c.date, design)})` : ''}`).join(' • ')}</p>
         </div>
@@ -87,7 +87,7 @@ export function CompactTemplate({ data, accentColor, design }: TemplateProps) {
           <h2 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: accentColor }}>Projects</h2>
           <div className="space-y-0.5">
             {projects.map(proj => (
-              <div key={proj.id} className="text-gray-600">
+              <div key={proj.id} data-pdf-section className="text-gray-600">
                 <a href={proj.url} target="_blank" rel="noreferrer" className="underline underline-offset-2">{proj.name}</a>
                 {proj.description && `: ${proj.description}`}
               </div>
