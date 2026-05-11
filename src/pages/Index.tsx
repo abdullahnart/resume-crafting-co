@@ -379,22 +379,57 @@ function ResumeBuilder() {
     if (!resumeRef.current) return;
     setDownloading(true);
     try {
-      const canvas = await html2canvas(resumeRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const source = resumeRef.current;
+      const SCALE = 2;
+      const canvas = await html2canvas(source, { scale: SCALE, useCORS: true, backgroundColor: '#ffffff' });
       const fmt = design.paperSize === 'letter' ? 'letter' : 'a4';
       const pdf = new jsPDF('p', 'mm', fmt);
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
+      const pxPerMm = canvas.width / pdfWidth;
+      const pageHeightPx = Math.floor(pdfHeight * pxPerMm);
       const imgFullHeightMm = (canvas.height * pdfWidth) / canvas.width;
 
       if (imgFullHeightMm <= pdfHeight + 0.5) {
         pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, imgFullHeightMm);
       } else {
-        const pxPerMm = canvas.width / pdfWidth;
-        const pageHeightPx = Math.floor(pdfHeight * pxPerMm);
+        // Build sorted list of safe break Y-positions (in canvas px) from leaf-ish descendants:
+        // we use the *bottom* of each block element so we never cut through a line/bullet.
+        const sourceRect = source.getBoundingClientRect();
+        const cssToCanvas = canvas.height / sourceRect.height; // accounts for actual rendered scale
+        const breakpoints = new Set<number>();
+        const all = source.querySelectorAll<HTMLElement>('*');
+        all.forEach(el => {
+          const tag = el.tagName;
+          // Skip inline-only elements (spans, anchors) — their bottoms are noisy.
+          if (tag === 'SPAN' || tag === 'A' || tag === 'STRONG' || tag === 'EM' || tag === 'B' || tag === 'I') return;
+          const r = el.getBoundingClientRect();
+          if (r.height === 0) return;
+          const bottomPx = (r.bottom - sourceRect.top) * cssToCanvas;
+          if (bottomPx > 0 && bottomPx <= canvas.height) breakpoints.add(Math.round(bottomPx));
+        });
+        breakpoints.add(canvas.height);
+        const breaks = Array.from(breakpoints).sort((a, b) => a - b);
+
         let renderedPx = 0;
         let pageIndex = 0;
         while (renderedPx < canvas.height) {
-          const sliceHeightPx = Math.min(pageHeightPx, canvas.height - renderedPx);
+          const remaining = canvas.height - renderedPx;
+          let sliceEnd: number;
+          if (remaining <= pageHeightPx) {
+            sliceEnd = canvas.height;
+          } else {
+            const pageLimit = renderedPx + pageHeightPx;
+            // largest breakpoint <= pageLimit and > renderedPx
+            let candidate = renderedPx;
+            for (const bp of breaks) {
+              if (bp > renderedPx && bp <= pageLimit) candidate = bp;
+              else if (bp > pageLimit) break;
+            }
+            // fallback if no break fits (e.g. one giant element): hard slice at pageLimit
+            sliceEnd = candidate > renderedPx ? candidate : pageLimit;
+          }
+          const sliceHeightPx = sliceEnd - renderedPx;
           const pageCanvas = document.createElement('canvas');
           pageCanvas.width = canvas.width;
           pageCanvas.height = sliceHeightPx;
@@ -406,7 +441,7 @@ function ResumeBuilder() {
           const sliceHeightMm = (sliceHeightPx * pdfWidth) / canvas.width;
           if (pageIndex > 0) pdf.addPage();
           pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, sliceHeightMm);
-          renderedPx += sliceHeightPx;
+          renderedPx = sliceEnd;
           pageIndex++;
         }
       }
@@ -416,6 +451,7 @@ function ResumeBuilder() {
     }
     setDownloading(false);
   }, [data.personalInfo.fullName, design.paperSize]);
+
 
   const fontStack = FONT_FAMILIES.find(f => f.label === design.fontFamily)?.value || design.fontFamily;
   const paper = PAPER[design.paperSize];
