@@ -383,7 +383,8 @@ function ResumeBuilder() {
       const SCALE = 2;
       const canvas = await html2canvas(source, { scale: SCALE, useCORS: true, backgroundColor: '#ffffff' });
       const fmt = design.paperSize === 'letter' ? 'letter' : 'a4';
-      const pdf = new jsPDF('p', 'mm', fmt);
+      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: fmt, compress: true });
+      const JPEG_QUALITY = 0.82;
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       const pxPerMm = canvas.width / pdfWidth;
@@ -391,7 +392,7 @@ function ResumeBuilder() {
       const imgFullHeightMm = (canvas.height * pdfWidth) / canvas.width;
 
       if (imgFullHeightMm <= pdfHeight + 0.5) {
-        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, imgFullHeightMm);
+        pdf.addImage(canvas.toDataURL('image/jpeg', JPEG_QUALITY), 'JPEG', 0, 0, pdfWidth, imgFullHeightMm, undefined, 'FAST');
       } else {
         // Build sorted list of safe break Y-positions (in canvas px) from leaf-ish descendants:
         // we use the *bottom* of each block element so we never cut through a line/bullet.
@@ -440,7 +441,7 @@ function ResumeBuilder() {
           ctx.drawImage(canvas, 0, renderedPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
           const sliceHeightMm = (sliceHeightPx * pdfWidth) / canvas.width;
           if (pageIndex > 0) pdf.addPage();
-          pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, sliceHeightMm);
+          pdf.addImage(pageCanvas.toDataURL('image/jpeg', JPEG_QUALITY), 'JPEG', 0, 0, pdfWidth, sliceHeightMm, undefined, 'FAST');
           renderedPx = sliceEnd;
           pageIndex++;
         }
