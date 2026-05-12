@@ -441,7 +441,7 @@ function ResumeBuilder() {
           ctx.drawImage(canvas, 0, renderedPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
           const sliceHeightMm = (sliceHeightPx * pdfWidth) / canvas.width;
           if (pageIndex > 0) pdf.addPage();
-          pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, sliceHeightMm);
+          pdf.addImage(pageCanvas.toDataURL('image/jpeg', JPEG_QUALITY), 'JPEG', 0, 0, pdfWidth, sliceHeightMm, undefined, 'FAST');
           renderedPx = sliceEnd;
           pageIndex++;
         }
