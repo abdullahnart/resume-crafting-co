@@ -392,7 +392,7 @@ function ResumeBuilder() {
       const imgFullHeightMm = (canvas.height * pdfWidth) / canvas.width;
 
       if (imgFullHeightMm <= pdfHeight + 0.5) {
-        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, imgFullHeightMm);
+        pdf.addImage(canvas.toDataURL('image/jpeg', JPEG_QUALITY), 'JPEG', 0, 0, pdfWidth, imgFullHeightMm, undefined, 'FAST');
       } else {
         // Build sorted list of safe break Y-positions (in canvas px) from leaf-ish descendants:
         // we use the *bottom* of each block element so we never cut through a line/bullet.
