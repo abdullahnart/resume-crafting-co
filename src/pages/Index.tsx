@@ -378,6 +378,7 @@ function ResumeBuilder() {
   const handleDownloadPDF = useCallback(async () => {
     if (!resumeRef.current) return;
     setDownloading(true);
+    let exportRoot: HTMLDivElement | null = null;
     try {
       const source = resumeRef.current;
       const SCALE = 2;
@@ -399,7 +400,7 @@ function ResumeBuilder() {
       const content = source.firstElementChild?.cloneNode(true) as HTMLElement | null;
       if (!content) return;
 
-      const exportRoot = document.createElement('div');
+      exportRoot = document.createElement('div');
       exportRoot.setAttribute('data-pdf-export-root', 'true');
       exportRoot.style.cssText = [
         'position:fixed', 'left:0', 'top:0', 'z-index:-1000', 'pointer-events:none',
@@ -460,7 +461,7 @@ function ResumeBuilder() {
         scrollX: 0,
         scrollY: 0,
       });
-      document.body.removeChild(exportRoot);
+      if (exportRoot.isConnected) document.body.removeChild(exportRoot);
 
       const pageCanvas = document.createElement('canvas');
       pageCanvas.width = Math.round(contentWidthPx * SCALE);
@@ -488,8 +489,10 @@ function ResumeBuilder() {
       pdf.save(`${data.personalInfo.fullName || 'resume'}.pdf`);
     } catch (err) {
       console.error('PDF generation failed:', err);
+    } finally {
+      if (exportRoot?.isConnected) document.body.removeChild(exportRoot);
+      setDownloading(false);
     }
-    setDownloading(false);
   }, [data.personalInfo.fullName, design]);
 
 
