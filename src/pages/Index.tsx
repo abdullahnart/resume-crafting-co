@@ -393,8 +393,7 @@ function ResumeBuilder() {
       const marginYmm = design.marginY * 25.4;
       const contentWidthMm = Math.max(10, pdfWidth - marginXmm * 2);
       const contentHeightMm = Math.max(10, pdfHeight - marginYmm * 2);
-      const pageBottomGuardMm = 6;
-      const captureHeightMm = Math.max(10, contentHeightMm - pageBottomGuardMm);
+      const captureHeightMm = contentHeightMm;
       const contentWidthPx = Math.round(contentWidthMm * pxPerMm);
       const captureHeightPx = Math.round(captureHeightMm * pxPerMm);
       const columnGapPx = 48;
