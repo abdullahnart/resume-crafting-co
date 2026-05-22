@@ -445,7 +445,7 @@ function ResumeBuilder() {
       exportRoot.appendChild(flow);
       document.body.appendChild(exportRoot);
 
-      await new Promise(requestAnimationFrame);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const pageCount = Math.max(1, Math.ceil(flow.scrollWidth / contentWidthPx));
       const captureWidth = pageCount * contentWidthPx;
       exportRoot.style.width = `${captureWidth}px`;
