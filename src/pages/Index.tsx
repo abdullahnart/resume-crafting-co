@@ -393,8 +393,10 @@ function ResumeBuilder() {
       const marginYmm = design.marginY * 25.4;
       const contentWidthMm = Math.max(10, pdfWidth - marginXmm * 2);
       const contentHeightMm = Math.max(10, pdfHeight - marginYmm * 2);
+      const pageBottomGuardMm = 6;
+      const captureHeightMm = Math.max(10, contentHeightMm - pageBottomGuardMm);
       const contentWidthPx = Math.round(contentWidthMm * pxPerMm);
-      const contentHeightPx = Math.round(contentHeightMm * pxPerMm);
+      const captureHeightPx = Math.round(captureHeightMm * pxPerMm);
       const fontStack = FONT_FAMILIES.find(f => f.label === design.fontFamily)?.value || design.fontFamily;
 
       const content = source.firstElementChild?.cloneNode(true) as HTMLElement | null;
@@ -404,14 +406,14 @@ function ResumeBuilder() {
       exportRoot.setAttribute('data-pdf-export-root', 'true');
       exportRoot.style.cssText = [
         'position:fixed', 'left:0', 'top:0', 'z-index:-1000', 'pointer-events:none',
-        'background:#ffffff', `width:${contentWidthPx}px`, `height:${contentHeightPx}px`,
+        'background:#ffffff', `width:${contentWidthPx}px`, `height:${captureHeightPx}px`,
         'overflow:visible', `font-family:${fontStack}`,
       ].join(';');
 
       const flow = document.createElement('div');
       flow.setAttribute('data-pdf-export-flow', 'true');
       flow.style.cssText = [
-        `width:${contentWidthPx}px`, `height:${contentHeightPx}px`, 'overflow:visible',
+        `width:${contentWidthPx}px`, `height:${captureHeightPx}px`, 'overflow:visible',
         `column-width:${contentWidthPx}px`, 'column-gap:0', 'column-fill:auto',
         'background:#ffffff', `font-family:${fontStack}`,
       ].join(';');
@@ -455,9 +457,9 @@ function ResumeBuilder() {
         useCORS: true,
         backgroundColor: '#ffffff',
         width: captureWidth,
-        height: contentHeightPx,
+        height: captureHeightPx,
         windowWidth: captureWidth,
-        windowHeight: contentHeightPx,
+        windowHeight: captureHeightPx,
         scrollX: 0,
         scrollY: 0,
       });
@@ -465,7 +467,7 @@ function ResumeBuilder() {
 
       const pageCanvas = document.createElement('canvas');
       pageCanvas.width = Math.round(contentWidthPx * SCALE);
-      pageCanvas.height = Math.round(contentHeightPx * SCALE);
+      pageCanvas.height = Math.round(captureHeightPx * SCALE);
       const ctx = pageCanvas.getContext('2d');
       if (!ctx) return;
 
@@ -484,7 +486,7 @@ function ResumeBuilder() {
           pageCanvas.height,
         );
         if (page > 0) pdf.addPage();
-        pdf.addImage(pageCanvas.toDataURL('image/jpeg', JPEG_QUALITY), 'JPEG', marginXmm, marginYmm, contentWidthMm, contentHeightMm, undefined, 'FAST');
+        pdf.addImage(pageCanvas.toDataURL('image/jpeg', JPEG_QUALITY), 'JPEG', marginXmm, marginYmm, contentWidthMm, captureHeightMm, undefined, 'FAST');
       }
       pdf.save(`${data.personalInfo.fullName || 'resume'}.pdf`);
     } catch (err) {
