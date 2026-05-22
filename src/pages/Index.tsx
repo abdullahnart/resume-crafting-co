@@ -397,6 +397,7 @@ function ResumeBuilder() {
       const captureHeightMm = Math.max(10, contentHeightMm - pageBottomGuardMm);
       const contentWidthPx = Math.round(contentWidthMm * pxPerMm);
       const captureHeightPx = Math.round(captureHeightMm * pxPerMm);
+      const columnGapPx = 48;
       const fontStack = FONT_FAMILIES.find(f => f.label === design.fontFamily)?.value || design.fontFamily;
 
       const content = source.firstElementChild?.cloneNode(true) as HTMLElement | null;
@@ -414,7 +415,7 @@ function ResumeBuilder() {
       flow.setAttribute('data-pdf-export-flow', 'true');
       flow.style.cssText = [
         `width:${contentWidthPx}px`, `height:${captureHeightPx}px`, 'overflow:visible',
-        `column-width:${contentWidthPx}px`, 'column-gap:0', 'column-fill:auto',
+        `column-width:${contentWidthPx}px`, `column-gap:${columnGapPx}px`, 'column-fill:auto',
         'background:#ffffff', `font-family:${fontStack}`,
       ].join(';');
 
@@ -449,8 +450,9 @@ function ResumeBuilder() {
       document.body.appendChild(exportRoot);
 
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      const pageCount = Math.max(1, Math.ceil(flow.scrollWidth / contentWidthPx));
-      const captureWidth = pageCount * contentWidthPx;
+      const columnStridePx = contentWidthPx + columnGapPx;
+      const pageCount = Math.max(1, Math.ceil((flow.scrollWidth + columnGapPx) / columnStridePx));
+      const captureWidth = pageCount * contentWidthPx + (pageCount - 1) * columnGapPx;
       exportRoot.style.width = `${captureWidth}px`;
       const canvas = await html2canvas(flow, {
         scale: SCALE,
@@ -476,7 +478,7 @@ function ResumeBuilder() {
         ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
         ctx.drawImage(
           canvas,
-          page * pageCanvas.width,
+          page * Math.round(columnStridePx * SCALE),
           0,
           pageCanvas.width,
           pageCanvas.height,
