@@ -381,6 +381,7 @@ function ResumeBuilder() {
     try {
       const source = resumeRef.current;
       const SCALE = 2;
+      if ('fonts' in document) await document.fonts.ready;
       const canvas = await html2canvas(source, { scale: SCALE, useCORS: true, backgroundColor: '#ffffff' });
       const fmt = design.paperSize === 'letter' ? 'letter' : 'a4';
       const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: fmt, compress: true });
@@ -394,42 +395,76 @@ function ResumeBuilder() {
       if (imgFullHeightMm <= pdfHeight + 0.5) {
         pdf.addImage(canvas.toDataURL('image/jpeg', JPEG_QUALITY), 'JPEG', 0, 0, pdfWidth, imgFullHeightMm, undefined, 'FAST');
       } else {
-        // Build sorted list of safe break Y-positions (in canvas px) from leaf-ish descendants:
-        // we use the *bottom* of each block element so we never cut through a line/bullet.
         const sourceRect = source.getBoundingClientRect();
-        const cssToCanvas = canvas.height / sourceRect.height; // accounts for actual rendered scale
+        const cssToCanvas = canvas.height / sourceRect.height;
+        const textGuardPx = Math.max(4, Math.ceil(2 * cssToCanvas));
+        const pageGuardPx = Math.max(12, Math.ceil(6 * cssToCanvas));
+        const minimumUsefulSlicePx = pageHeightPx * 0.25;
+        const textIntervals: { top: number; bottom: number }[] = [];
+
+        const walker = document.createTreeWalker(source, NodeFilter.SHOW_TEXT, {
+          acceptNode: (node) => node.textContent?.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
+        });
+        while (walker.nextNode()) {
+          const range = document.createRange();
+          range.selectNodeContents(walker.currentNode);
+          Array.from(range.getClientRects()).forEach((rect) => {
+            const top = Math.max(0, Math.floor((rect.top - sourceRect.top) * cssToCanvas) - textGuardPx);
+            const bottom = Math.min(canvas.height, Math.ceil((rect.bottom - sourceRect.top) * cssToCanvas) + textGuardPx);
+            if (bottom > top) textIntervals.push({ top, bottom });
+          });
+        }
+
+        const mergedTextIntervals = textIntervals
+          .sort((a, b) => a.top - b.top)
+          .reduce<{ top: number; bottom: number }[]>((merged, interval) => {
+            const last = merged[merged.length - 1];
+            if (!last || interval.top > last.bottom) merged.push({ ...interval });
+            else last.bottom = Math.max(last.bottom, interval.bottom);
+            return merged;
+          }, []);
+
         const breakpoints = new Set<number>();
-        const all = source.querySelectorAll<HTMLElement>('*');
+        const all = source.querySelectorAll<HTMLElement>('h1,h2,h3,h4,p,li,ul,ol,section,article,div');
         all.forEach(el => {
-          const tag = el.tagName;
-          // Skip inline-only elements (spans, anchors) — their bottoms are noisy.
-          if (tag === 'SPAN' || tag === 'A' || tag === 'STRONG' || tag === 'EM' || tag === 'B' || tag === 'I') return;
           const r = el.getBoundingClientRect();
           if (r.height === 0) return;
-          const bottomPx = (r.bottom - sourceRect.top) * cssToCanvas;
-          if (bottomPx > 0 && bottomPx <= canvas.height) breakpoints.add(Math.round(bottomPx));
+          const bottomPx = Math.min(canvas.height, Math.round((r.bottom - sourceRect.top) * cssToCanvas) + textGuardPx);
+          if (bottomPx > 0 && bottomPx <= canvas.height) breakpoints.add(bottomPx);
         });
         breakpoints.add(canvas.height);
         const breaks = Array.from(breakpoints).sort((a, b) => a - b);
 
+        const isInsideText = (y: number) => mergedTextIntervals.some(interval => y > interval.top && y < interval.bottom);
+        const nearestTextSafeY = (limit: number, start: number) => {
+          let y = limit;
+          for (let i = mergedTextIntervals.length - 1; i >= 0; i--) {
+            const interval = mergedTextIntervals[i];
+            if (interval.bottom <= start) break;
+            if (interval.top < y && interval.bottom > y) y = interval.top - pageGuardPx;
+          }
+          return Math.max(start, Math.floor(y));
+        };
+
+        const getSafeSliceEnd = (start: number) => {
+          const remaining = canvas.height - start;
+          if (remaining <= pageHeightPx) return canvas.height;
+          const pageLimit = Math.min(start + pageHeightPx - pageGuardPx, canvas.height);
+          const textSafeLimit = nearestTextSafeY(pageLimit, start);
+          let candidate = start;
+          for (const bp of breaks) {
+            if (bp > start && bp <= textSafeLimit && !isInsideText(bp)) candidate = bp;
+            else if (bp > textSafeLimit) break;
+          }
+          if (candidate > start + minimumUsefulSlicePx) return candidate;
+          if (textSafeLimit > start + minimumUsefulSlicePx) return textSafeLimit;
+          return Math.min(start + pageHeightPx, canvas.height);
+        };
+
         let renderedPx = 0;
         let pageIndex = 0;
         while (renderedPx < canvas.height) {
-          const remaining = canvas.height - renderedPx;
-          let sliceEnd: number;
-          if (remaining <= pageHeightPx) {
-            sliceEnd = canvas.height;
-          } else {
-            const pageLimit = renderedPx + pageHeightPx;
-            // largest breakpoint <= pageLimit and > renderedPx
-            let candidate = renderedPx;
-            for (const bp of breaks) {
-              if (bp > renderedPx && bp <= pageLimit) candidate = bp;
-              else if (bp > pageLimit) break;
-            }
-            // fallback if no break fits (e.g. one giant element): hard slice at pageLimit
-            sliceEnd = candidate > renderedPx ? candidate : pageLimit;
-          }
+          const sliceEnd = getSafeSliceEnd(renderedPx);
           const sliceHeightPx = sliceEnd - renderedPx;
           const pageCanvas = document.createElement('canvas');
           pageCanvas.width = canvas.width;
