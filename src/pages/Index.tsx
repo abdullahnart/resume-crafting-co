@@ -378,115 +378,126 @@ function ResumeBuilder() {
   const handleDownloadPDF = useCallback(async () => {
     if (!resumeRef.current) return;
     setDownloading(true);
+    let exportRoot: HTMLDivElement | null = null;
     try {
       const source = resumeRef.current;
       const SCALE = 2;
+      const JPEG_QUALITY = 0.84;
       if ('fonts' in document) await document.fonts.ready;
-      const canvas = await html2canvas(source, { scale: SCALE, useCORS: true, backgroundColor: '#ffffff' });
       const fmt = design.paperSize === 'letter' ? 'letter' : 'a4';
       const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: fmt, compress: true });
-      const JPEG_QUALITY = 0.82;
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const pxPerMm = canvas.width / pdfWidth;
-      const pageHeightPx = Math.floor(pdfHeight * pxPerMm);
-      const imgFullHeightMm = (canvas.height * pdfWidth) / canvas.width;
+      const pxPerMm = 96 / 25.4;
+      const marginXmm = design.marginX * 25.4;
+      const marginYmm = design.marginY * 25.4;
+      const contentWidthMm = Math.max(10, pdfWidth - marginXmm * 2);
+      const contentHeightMm = Math.max(10, pdfHeight - marginYmm * 2);
+      const pageBottomGuardMm = 6;
+      const captureHeightMm = Math.max(10, contentHeightMm - pageBottomGuardMm);
+      const contentWidthPx = Math.round(contentWidthMm * pxPerMm);
+      const captureHeightPx = Math.round(captureHeightMm * pxPerMm);
+      const columnGapPx = 48;
+      const fontStack = FONT_FAMILIES.find(f => f.label === design.fontFamily)?.value || design.fontFamily;
 
-      if (imgFullHeightMm <= pdfHeight + 0.5) {
-        pdf.addImage(canvas.toDataURL('image/jpeg', JPEG_QUALITY), 'JPEG', 0, 0, pdfWidth, imgFullHeightMm, undefined, 'FAST');
-      } else {
-        const sourceRect = source.getBoundingClientRect();
-        const cssToCanvas = canvas.height / sourceRect.height;
-        const textGuardPx = Math.max(4, Math.ceil(2 * cssToCanvas));
-        const pageGuardPx = Math.max(12, Math.ceil(6 * cssToCanvas));
-        const minimumUsefulSlicePx = pageHeightPx * 0.25;
-        const textIntervals: { top: number; bottom: number }[] = [];
+      const content = source.firstElementChild?.cloneNode(true) as HTMLElement | null;
+      if (!content) return;
 
-        const walker = document.createTreeWalker(source, NodeFilter.SHOW_TEXT, {
-          acceptNode: (node) => node.textContent?.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
-        });
-        while (walker.nextNode()) {
-          const range = document.createRange();
-          range.selectNodeContents(walker.currentNode);
-          Array.from(range.getClientRects()).forEach((rect) => {
-            const top = Math.max(0, Math.floor((rect.top - sourceRect.top) * cssToCanvas) - textGuardPx);
-            const bottom = Math.min(canvas.height, Math.ceil((rect.bottom - sourceRect.top) * cssToCanvas) + textGuardPx);
-            if (bottom > top) textIntervals.push({ top, bottom });
-          });
+      exportRoot = document.createElement('div');
+      exportRoot.setAttribute('data-pdf-export-root', 'true');
+      exportRoot.style.cssText = [
+        'position:fixed', 'left:0', 'top:0', 'z-index:-1000', 'pointer-events:none',
+        'background:#ffffff', `width:${contentWidthPx}px`, `height:${captureHeightPx}px`,
+        'overflow:visible', `font-family:${fontStack}`,
+      ].join(';');
+
+      const flow = document.createElement('div');
+      flow.setAttribute('data-pdf-export-flow', 'true');
+      flow.style.cssText = [
+        `width:${contentWidthPx}px`, `height:${captureHeightPx}px`, 'overflow:visible',
+        `column-width:${contentWidthPx}px`, `column-gap:${columnGapPx}px`, 'column-fill:auto',
+        'background:#ffffff', `font-family:${fontStack}`,
+      ].join(';');
+
+      const exportStyles = document.createElement('style');
+      exportStyles.textContent = `
+        [data-pdf-export-flow] h1,
+        [data-pdf-export-flow] h2,
+        [data-pdf-export-flow] h3,
+        [data-pdf-export-flow] h4,
+        [data-pdf-export-flow] p,
+        [data-pdf-export-flow] li {
+          break-inside: avoid;
+          page-break-inside: avoid;
         }
-
-        const mergedTextIntervals = textIntervals
-          .sort((a, b) => a.top - b.top)
-          .reduce<{ top: number; bottom: number }[]>((merged, interval) => {
-            const last = merged[merged.length - 1];
-            if (!last || interval.top > last.bottom) merged.push({ ...interval });
-            else last.bottom = Math.max(last.bottom, interval.bottom);
-            return merged;
-          }, []);
-
-        const breakpoints = new Set<number>();
-        const all = source.querySelectorAll<HTMLElement>('h1,h2,h3,h4,p,li,ul,ol,section,article,div');
-        all.forEach(el => {
-          const r = el.getBoundingClientRect();
-          if (r.height === 0) return;
-          const bottomPx = Math.min(canvas.height, Math.round((r.bottom - sourceRect.top) * cssToCanvas) + textGuardPx);
-          if (bottomPx > 0 && bottomPx <= canvas.height) breakpoints.add(bottomPx);
-        });
-        breakpoints.add(canvas.height);
-        const breaks = Array.from(breakpoints).sort((a, b) => a - b);
-
-        const isInsideText = (y: number) => mergedTextIntervals.some(interval => y > interval.top && y < interval.bottom);
-        const nearestTextSafeY = (limit: number, start: number) => {
-          let y = limit;
-          for (let i = mergedTextIntervals.length - 1; i >= 0; i--) {
-            const interval = mergedTextIntervals[i];
-            if (interval.bottom <= start) break;
-            if (interval.top < y && interval.bottom > y) y = interval.top - pageGuardPx;
-          }
-          return Math.max(start, Math.floor(y));
-        };
-
-        const getSafeSliceEnd = (start: number) => {
-          const remaining = canvas.height - start;
-          if (remaining <= pageHeightPx) return canvas.height;
-          const pageLimit = Math.min(start + pageHeightPx - pageGuardPx, canvas.height);
-          const textSafeLimit = nearestTextSafeY(pageLimit, start);
-          let candidate = start;
-          for (const bp of breaks) {
-            if (bp > start && bp <= textSafeLimit && !isInsideText(bp)) candidate = bp;
-            else if (bp > textSafeLimit) break;
-          }
-          if (candidate > start + minimumUsefulSlicePx) return candidate;
-          if (textSafeLimit > start + minimumUsefulSlicePx) return textSafeLimit;
-          return Math.min(start + pageHeightPx, canvas.height);
-        };
-
-        let renderedPx = 0;
-        let pageIndex = 0;
-        while (renderedPx < canvas.height) {
-          const sliceEnd = getSafeSliceEnd(renderedPx);
-          const sliceHeightPx = sliceEnd - renderedPx;
-          const pageCanvas = document.createElement('canvas');
-          pageCanvas.width = canvas.width;
-          pageCanvas.height = sliceHeightPx;
-          const ctx = pageCanvas.getContext('2d');
-          if (!ctx) break;
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-          ctx.drawImage(canvas, 0, renderedPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
-          const sliceHeightMm = (sliceHeightPx * pdfWidth) / canvas.width;
-          if (pageIndex > 0) pdf.addPage();
-          pdf.addImage(pageCanvas.toDataURL('image/jpeg', JPEG_QUALITY), 'JPEG', 0, 0, pdfWidth, sliceHeightMm, undefined, 'FAST');
-          renderedPx = sliceEnd;
-          pageIndex++;
+        [data-pdf-export-flow] h1,
+        [data-pdf-export-flow] h2,
+        [data-pdf-export-flow] h3,
+        [data-pdf-export-flow] h4 {
+          break-after: avoid;
+          page-break-after: avoid;
         }
+        [data-pdf-export-flow] ul,
+        [data-pdf-export-flow] ol {
+          break-inside: auto;
+          page-break-inside: auto;
+        }
+      `;
+
+      flow.appendChild(content);
+      exportRoot.appendChild(exportStyles);
+      exportRoot.appendChild(flow);
+      document.body.appendChild(exportRoot);
+
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const columnStridePx = contentWidthPx + columnGapPx;
+      const pageCount = Math.max(1, Math.ceil((flow.scrollWidth + columnGapPx) / columnStridePx));
+      const captureWidth = pageCount * contentWidthPx + (pageCount - 1) * columnGapPx;
+      exportRoot.style.width = `${captureWidth}px`;
+      const canvas = await html2canvas(flow, {
+        scale: SCALE,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        width: captureWidth,
+        height: captureHeightPx,
+        windowWidth: captureWidth,
+        windowHeight: captureHeightPx,
+        scrollX: 0,
+        scrollY: 0,
+      });
+      if (exportRoot.isConnected) document.body.removeChild(exportRoot);
+
+      const pageCanvas = document.createElement('canvas');
+      pageCanvas.width = Math.round(contentWidthPx * SCALE);
+      pageCanvas.height = Math.round(captureHeightPx * SCALE);
+      const ctx = pageCanvas.getContext('2d');
+      if (!ctx) return;
+
+      for (let page = 0; page < pageCount; page++) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+        ctx.drawImage(
+          canvas,
+          page * Math.round(columnStridePx * SCALE),
+          0,
+          pageCanvas.width,
+          pageCanvas.height,
+          0,
+          0,
+          pageCanvas.width,
+          pageCanvas.height,
+        );
+        if (page > 0) pdf.addPage();
+        pdf.addImage(pageCanvas.toDataURL('image/jpeg', JPEG_QUALITY), 'JPEG', marginXmm, marginYmm, contentWidthMm, captureHeightMm, undefined, 'FAST');
       }
       pdf.save(`${data.personalInfo.fullName || 'resume'}.pdf`);
     } catch (err) {
       console.error('PDF generation failed:', err);
+    } finally {
+      if (exportRoot?.isConnected) document.body.removeChild(exportRoot);
+      setDownloading(false);
     }
-    setDownloading(false);
-  }, [data.personalInfo.fullName, design.paperSize]);
+  }, [data.personalInfo.fullName, design]);
 
 
   const fontStack = FONT_FAMILIES.find(f => f.label === design.fontFamily)?.value || design.fontFamily;
