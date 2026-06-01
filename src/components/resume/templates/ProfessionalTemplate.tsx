@@ -7,15 +7,24 @@ export function ProfessionalTemplate({ data, accentColor, design }: TemplateProp
 
   return (
     <div className="text-[11px] text-gray-900" style={{ lineHeight: d.lineHeight }}>
-      <div className={`p-6 text-white ${alignClass(d.headerAlign)}`} style={{ backgroundColor: accentColor }}>
-        <h1 className="text-2xl font-bold">{p.fullName || 'Your Name'}</h1>
-        {p.jobTitle && <p className="text-sm opacity-90 mt-0.5">{p.jobTitle}</p>}
-        <div className="grid grid-cols-3 gap-2 mt-3 text-[10px] opacity-80 text-left">
-          {p.email && <span>✉ {p.email}</span>}
-          {p.phone && <span>☎ {p.phone}</span>}
-          {p.location && <span>📍 {p.location}</span>}
-          {p.linkedin && <span>🔗 {p.linkedin}</span>}
-          {p.website && <span>🌐 {p.website}</span>}
+      <div className={`p-6 text-white flex items-center gap-4 ${p.photo ? '' : alignClass(d.headerAlign)}`} style={{ backgroundColor: accentColor }}>
+        {p.photo && (
+          <img
+            src={p.photo}
+            alt={p.fullName || 'Profile'}
+            className="w-20 h-20 rounded-full object-cover border-2 border-white/50 shrink-0"
+          />
+        )}
+        <div className={`flex-1 ${alignClass(d.headerAlign)}`}>
+          <h1 className="text-2xl font-bold">{p.fullName || 'Your Name'}</h1>
+          {p.jobTitle && <p className="text-sm opacity-90 mt-0.5">{p.jobTitle}</p>}
+          <div className="grid grid-cols-3 gap-2 mt-3 text-[10px] opacity-80 text-left">
+            {p.email && <span>✉ {p.email}</span>}
+            {p.phone && <span>☎ {p.phone}</span>}
+            {p.location && <span>📍 {p.location}</span>}
+            {p.linkedin && <span>🔗 {p.linkedin}</span>}
+            {p.website && <span>🌐 {p.website}</span>}
+          </div>
         </div>
       </div>
 
