@@ -22,6 +22,7 @@ export function PersonalInfoForm() {
     <div className="space-y-4">
       <h2 className="text-lg font-semibold font-[var(--font-heading)]">Personal Information</h2>
       <ResumeUploader />
+      <PhotoUpload />
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           <Label>Full Name</Label>
