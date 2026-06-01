@@ -195,6 +195,99 @@ export async function extractTextFromPDF(file: File): Promise<string> {
   return pages.join('\n---PAGE_BREAK---\n');
 }
 
+export async function extractFirstImageFromPDF(file: File): Promise<string> {
+  try {
+    const pdfjsLib: any = await import('pdfjs-dist');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+    const page = await pdf.getPage(1);
+    const ops = await page.getOperatorList();
+    const OPS = pdfjsLib.OPS;
+    const imgNames: string[] = [];
+    for (let i = 0; i < ops.fnArray.length; i++) {
+      const fn = ops.fnArray[i];
+      if (fn === OPS.paintImageXObject || fn === OPS.paintJpegXObject || fn === OPS.paintInlineImageXObject) {
+        const arg = ops.argsArray[i]?.[0];
+        if (typeof arg === 'string') imgNames.push(arg);
+      }
+    }
+    for (const name of imgNames) {
+      const img: any = await new Promise(resolve => {
+        try {
+          page.objs.get(name, (o: any) => resolve(o));
+        } catch {
+          resolve(null);
+        }
+      });
+      if (!img) continue;
+      const w = img.width || img.bitmap?.width;
+      const h = img.height || img.bitmap?.height;
+      if (!w || !h || w < 60 || h < 60) continue;
+      // Prefer roughly square / portrait images (likely profile photos)
+      const ratio = w / h;
+      if (ratio < 0.5 || ratio > 1.6) continue;
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) continue;
+      try {
+        if (img.bitmap) {
+          ctx.drawImage(img.bitmap, 0, 0);
+        } else if (img.data) {
+          const imageData = ctx.createImageData(w, h);
+          const src = img.data;
+          // Handle RGB -> RGBA
+          if (src.length === w * h * 3) {
+            for (let j = 0, k = 0; j < src.length; j += 3, k += 4) {
+              imageData.data[k] = src[j];
+              imageData.data[k + 1] = src[j + 1];
+              imageData.data[k + 2] = src[j + 2];
+              imageData.data[k + 3] = 255;
+            }
+          } else if (src.length === w * h * 4) {
+            imageData.data.set(src);
+          } else {
+            continue;
+          }
+          ctx.putImageData(imageData, 0, 0);
+        } else {
+          continue;
+        }
+        return canvas.toDataURL('image/jpeg', 0.85);
+      } catch {
+        continue;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return '';
+}
+
+export async function extractFirstImageFromDOCX(file: File): Promise<string> {
+  try {
+    const mammoth: any = await import('mammoth');
+    const arrayBuffer = await file.arrayBuffer();
+    let firstImage = '';
+    await mammoth.convertToHtml(
+      { arrayBuffer },
+      {
+        convertImage: mammoth.images.imgElement((image: any) =>
+          image.read('base64').then((data: string) => {
+            if (!firstImage) firstImage = `data:${image.contentType};base64,${data}`;
+            return { src: '' };
+          })
+        ),
+      }
+    );
+    return firstImage;
+  } catch {
+    return '';
+  }
+}
+
 export async function extractTextFromDOCX(file: File): Promise<string> {
   const mammoth = await import('mammoth');
   const arrayBuffer = await file.arrayBuffer();
@@ -207,6 +300,13 @@ export async function extractTextFromFile(file: File): Promise<string> {
   if (ext === 'pdf') return extractTextFromPDF(file);
   if (ext === 'docx' || ext === 'doc') return extractTextFromDOCX(file);
   throw new Error('Unsupported file format. Please upload a PDF or DOCX file.');
+}
+
+export async function extractFirstImageFromFile(file: File): Promise<string> {
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  if (ext === 'pdf') return extractFirstImageFromPDF(file);
+  if (ext === 'docx' || ext === 'doc') return extractFirstImageFromDOCX(file);
+  return '';
 }
 
 // --- Section splitting ---
