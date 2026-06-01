@@ -7,14 +7,23 @@ export function CreativeTemplate({ data, accentColor, design }: TemplateProps) {
 
   return (
     <div className="text-[11px] text-gray-900" style={{ lineHeight: d.lineHeight }}>
-      <div className={`p-6 pb-4 ${alignClass(d.headerAlign)}`} style={{ backgroundColor: accentColor }}>
-        <h1 className="text-3xl font-black text-white tracking-tight">{p.fullName || 'Your Name'}</h1>
-        {p.jobTitle && <p className="text-base text-white/80 font-light mt-1">{p.jobTitle}</p>}
-        <div className={`flex gap-3 mt-3 text-[10px] text-white/70 flex-wrap ${d.headerAlign === 'center' ? 'justify-center' : d.headerAlign === 'right' ? 'justify-end' : ''}`}>
-          {p.email && <span className="bg-white/10 px-2 py-0.5 rounded">{p.email}</span>}
-          {p.phone && <span className="bg-white/10 px-2 py-0.5 rounded">{p.phone}</span>}
-          {p.location && <span className="bg-white/10 px-2 py-0.5 rounded">{p.location}</span>}
-          {p.linkedin && <span className="bg-white/10 px-2 py-0.5 rounded">{p.linkedin}</span>}
+      <div className={`p-6 pb-4 flex items-center gap-4 ${p.photo ? '' : alignClass(d.headerAlign)}`} style={{ backgroundColor: accentColor }}>
+        {p.photo && (
+          <img
+            src={p.photo}
+            alt={p.fullName || 'Profile'}
+            className="w-24 h-24 rounded-full object-cover border-4 border-white/60 shrink-0"
+          />
+        )}
+        <div className={`flex-1 ${alignClass(d.headerAlign)}`}>
+          <h1 className="text-3xl font-black text-white tracking-tight">{p.fullName || 'Your Name'}</h1>
+          {p.jobTitle && <p className="text-base text-white/80 font-light mt-1">{p.jobTitle}</p>}
+          <div className={`flex gap-3 mt-3 text-[10px] text-white/70 flex-wrap ${d.headerAlign === 'center' && !p.photo ? 'justify-center' : d.headerAlign === 'right' && !p.photo ? 'justify-end' : ''}`}>
+            {p.email && <span className="bg-white/10 px-2 py-0.5 rounded">{p.email}</span>}
+            {p.phone && <span className="bg-white/10 px-2 py-0.5 rounded">{p.phone}</span>}
+            {p.location && <span className="bg-white/10 px-2 py-0.5 rounded">{p.location}</span>}
+            {p.linkedin && <span className="bg-white/10 px-2 py-0.5 rounded">{p.linkedin}</span>}
+          </div>
         </div>
       </div>
 

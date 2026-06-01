@@ -8,6 +8,13 @@ export function ModernTemplate({ data, accentColor, design }: TemplateProps) {
   return (
     <div className="flex text-[11px] min-h-full" style={{ lineHeight: d.lineHeight }}>
       <div className="w-[35%] p-5 text-white" style={{ backgroundColor: accentColor }}>
+        {p.photo && (
+          <img
+            src={p.photo}
+            alt={p.fullName || 'Profile'}
+            className="w-24 h-24 rounded-full object-cover border-2 border-white/40 mb-3"
+          />
+        )}
         <h1 className="text-xl font-bold mb-1">{p.fullName || 'Your Name'}</h1>
         {p.jobTitle && <p className="text-sm opacity-90 mb-4">{p.jobTitle}</p>}
 

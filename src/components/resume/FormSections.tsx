@@ -11,6 +11,50 @@ import { ResumeUploader } from './ResumeUploader';
 
 const uid = () => crypto.randomUUID();
 
+// --- Photo Upload ---
+function PhotoUpload() {
+  const { data, updateField } = useResume();
+  const p = data.personalInfo;
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      updateField('personalInfo', { ...p, photo: String(reader.result || '') });
+    };
+    reader.readAsDataURL(file);
+    if (inputRef.current) inputRef.current.value = '';
+  };
+
+  return (
+    <div className="flex items-center gap-3 rounded-lg border p-3 bg-muted/30">
+      <div
+        className="h-16 w-16 rounded-full bg-muted overflow-hidden border flex items-center justify-center text-xs text-muted-foreground"
+        style={p.photo ? { backgroundImage: `url(${p.photo})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}
+      >
+        {!p.photo && 'Photo'}
+      </div>
+      <div className="flex-1">
+        <Label>Profile Photo</Label>
+        <p className="text-xs text-muted-foreground">Shown on Modern, Professional & Creative templates.</p>
+      </div>
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+      <div className="flex flex-col gap-1">
+        <Button size="sm" variant="outline" onClick={() => inputRef.current?.click()}>
+          {p.photo ? 'Replace' : 'Upload'}
+        </Button>
+        {p.photo && (
+          <Button size="sm" variant="ghost" onClick={() => updateField('personalInfo', { ...p, photo: '' })}>
+            Remove
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // --- Personal Info ---
 export function PersonalInfoForm() {
   const { data, updateField } = useResume();
@@ -22,6 +66,7 @@ export function PersonalInfoForm() {
     <div className="space-y-4">
       <h2 className="text-lg font-semibold font-[var(--font-heading)]">Personal Information</h2>
       <ResumeUploader />
+      <PhotoUpload />
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           <Label>Full Name</Label>
