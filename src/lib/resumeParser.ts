@@ -212,6 +212,8 @@ export async function extractFirstImageFromPDF(file: File): Promise<string> {
         if (typeof arg === 'string') imgNames.push(arg);
       }
     }
+    type Candidate = { name: string; img: any; w: number; h: number; score: number };
+    const candidates: Candidate[] = [];
     for (const name of imgNames) {
       const img: any = await new Promise(resolve => {
         try {
@@ -223,10 +225,16 @@ export async function extractFirstImageFromPDF(file: File): Promise<string> {
       if (!img) continue;
       const w = img.width || img.bitmap?.width;
       const h = img.height || img.bitmap?.height;
-      if (!w || !h || w < 60 || h < 60) continue;
-      // Prefer roughly square / portrait images (likely profile photos)
+      if (!w || !h || w < 40 || h < 40) continue;
       const ratio = w / h;
-      if (ratio < 0.5 || ratio > 1.6) continue;
+      // Score: prefer square/portrait images close to ratio 1
+      const ratioScore = 1 - Math.min(1, Math.abs(1 - ratio));
+      const sizeScore = Math.min(1, (w * h) / (300 * 300));
+      candidates.push({ name, img, w, h, score: ratioScore * 0.7 + sizeScore * 0.3 });
+    }
+    // Sort best candidates first; fall back to any image if none look like a photo
+    candidates.sort((a, b) => b.score - a.score);
+    for (const { img, w, h } of candidates) {
       const canvas = document.createElement('canvas');
       canvas.width = w;
       canvas.height = h;
@@ -238,7 +246,6 @@ export async function extractFirstImageFromPDF(file: File): Promise<string> {
         } else if (img.data) {
           const imageData = ctx.createImageData(w, h);
           const src = img.data;
-          // Handle RGB -> RGBA
           if (src.length === w * h * 3) {
             for (let j = 0, k = 0; j < src.length; j += 3, k += 4) {
               imageData.data[k] = src[j];
@@ -260,6 +267,7 @@ export async function extractFirstImageFromPDF(file: File): Promise<string> {
         continue;
       }
     }
+
   } catch {
     // ignore
   }
