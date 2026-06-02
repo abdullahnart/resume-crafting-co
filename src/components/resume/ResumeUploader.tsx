@@ -28,7 +28,7 @@ export function ResumeUploader() {
           ...Object.fromEntries(
             Object.entries(parsed.personalInfo || {}).filter(([, v]) => v)
           ),
-          ...(photo && !prev.personalInfo.photo ? { photo } : {}),
+          ...(photo ? { photo } : {}),
         },
         summary: parsed.summary || prev.summary,
         experience: parsed.experience?.length ? parsed.experience : prev.experience,
