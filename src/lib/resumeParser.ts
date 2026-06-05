@@ -369,6 +369,21 @@ function isKnownSectionHeader(line: string): boolean {
   return Object.values(SECTION_HEADERS).some(re => re.test(normalized));
 }
 
+function isRealSectionHeaderAt(lines: string[], index: number): boolean {
+  const trimmed = normalizeSectionCandidate(lines[index] || '');
+  if (!isKnownSectionHeader(trimmed)) return false;
+
+  if (SECTION_HEADERS.experience.test(trimmed)) {
+    const previous = normalizeSectionCandidate(lines[index - 1] || '');
+    const next = normalizeSectionCandidate(lines[index + 1] || '');
+    const previousLooksLikeDuration = /^(?:\d+(?:\.\d+)?|months?|month|years?|year|of)$/i.test(previous)
+      || DURATION_RE.test(`${previous} ${trimmed}`);
+    if (previousLooksLikeDuration && !looksLikeExperienceEntryStart(next)) return false;
+  }
+
+  return true;
+}
+
 function looksLikeExperienceContinuation(text: string): boolean {
   const normalized = text.trim();
   if (!normalized) return false;
@@ -430,7 +445,7 @@ function moveContinuationBlock(
 
   blocks.forEach((block, index) => {
     const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
-    const nextSectionIndex = lines.findIndex((line, lineIndex) => lineIndex > 0 && isKnownSectionHeader(line));
+    const nextSectionIndex = lines.findIndex((_, lineIndex) => lineIndex > 0 && isRealSectionHeaderAt(lines, lineIndex));
     const candidate = (nextSectionIndex === -1 ? lines : lines.slice(0, nextSectionIndex)).join('\n').trim();
     const remainder = (nextSectionIndex === -1 ? [] : lines.slice(nextSectionIndex)).join('\n').trim();
 
