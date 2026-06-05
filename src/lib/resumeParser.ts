@@ -226,7 +226,7 @@ export async function extractFirstImageFromPDF(file: File): Promise<string> {
     });
 
     const addCandidate = (img: any, pageNumber: number, order: number) => {
-      if (!img) continue;
+      if (!img) return;
       const w = img.width || img.bitmap?.width;
       const h = img.height || img.bitmap?.height;
       if (!w || !h || w < 24 || h < 24) return;
