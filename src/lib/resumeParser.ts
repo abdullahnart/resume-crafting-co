@@ -580,8 +580,16 @@ function isBareExperienceMetadata(value: string): boolean {
 }
 
 function looksLikeCompanyName(value: string): boolean {
-  return /\b(?:ltd|pvt|labs?|technology|digital|global|solutions?|company|studio|agency)\b/i.test(value)
+  return COMPANY_HINT_RE.test(value)
     && !value.includes('|');
+}
+
+function stripExperienceFieldLabel(value: string): string {
+  return normalizeLine(value).replace(EXPERIENCE_INLINE_LABEL_RE, '').trim();
+}
+
+function isExperienceFieldLabel(value: string): boolean {
+  return EXPERIENCE_FIELD_LABEL_RE.test(normalizeLine(value));
 }
 
 function looksLikeRoleLabel(value: string): boolean {
@@ -600,12 +608,23 @@ function expandExperienceLines(text: string): string[] {
       const trimmed = rawLine.trim();
       if (!trimmed) return [];
 
-      const inlineBulletMatch = trimmed.match(/^(.*?)([•►▪].+)$/);
+      const withoutLabel = stripExperienceFieldLabel(trimmed);
+      if (!withoutLabel) return [];
+
+      const dateRangeMatch = withoutLabel.match(DATE_RANGE_RE);
+      if (dateRangeMatch && dateRangeMatch.index !== undefined && dateRangeMatch.index > 0) {
+        const beforeDate = withoutLabel.slice(0, dateRangeMatch.index).trim();
+        const dateAndAfter = withoutLabel.slice(dateRangeMatch.index).trim();
+        const afterDate = dateAndAfter.replace(DATE_RANGE_RE, '').trim();
+        return [beforeDate, dateRangeMatch[0], afterDate].filter(Boolean);
+      }
+
+      const inlineBulletMatch = withoutLabel.match(/^(.*?)([•►▪].+)$/);
       if (inlineBulletMatch && inlineBulletMatch[1].trim()) {
         return [inlineBulletMatch[1].trim(), inlineBulletMatch[2].trim()];
       }
 
-      return [trimmed];
+      return [withoutLabel];
     });
 }
 
