@@ -207,39 +207,50 @@ export async function extractFirstImageFromPDF(file: File): Promise<string> {
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
-    const page = await pdf.getPage(1);
-    const ops = await page.getOperatorList();
     const OPS = pdfjsLib.OPS;
-    const imgNames: string[] = [];
-    for (let i = 0; i < ops.fnArray.length; i++) {
-      const fn = ops.fnArray[i];
-      if (fn === OPS.paintImageXObject || fn === OPS.paintJpegXObject || fn === OPS.paintInlineImageXObject) {
-        const arg = ops.argsArray[i]?.[0];
-        if (typeof arg === 'string') imgNames.push(arg);
-      }
-    }
-    type Candidate = { name: string; img: any; w: number; h: number; score: number };
+    type Candidate = { img: any; w: number; h: number; score: number; pageNumber: number; order: number };
     const candidates: Candidate[] = [];
-    for (const name of imgNames) {
-      const img: any = await new Promise(resolve => {
+
+    const readObjectImage = async (page: any, name: string): Promise<any> => new Promise(resolve => {
+      const readFrom = (store: any) => {
         try {
-          page.objs.get(name, (o: any) => resolve(o));
+          store.get(name, (o: any) => resolve(o));
+          return true;
         } catch {
-          resolve(null);
+          return false;
         }
-      });
+      };
+      if (readFrom(page.objs)) return;
+      if (readFrom(page.commonObjs)) return;
+      resolve(null);
+    });
+
+    const addCandidate = (img: any, pageNumber: number, order: number) => {
       if (!img) continue;
       const w = img.width || img.bitmap?.width;
       const h = img.height || img.bitmap?.height;
-      if (!w || !h || w < 40 || h < 40) continue;
+      if (!w || !h || w < 24 || h < 24) return;
       const ratio = w / h;
-      // Score: prefer square/portrait images close to ratio 1
-      const ratioScore = 1 - Math.min(1, Math.abs(1 - ratio));
-      const sizeScore = Math.min(1, (w * h) / (300 * 300));
-      candidates.push({ name, img, w, h, score: ratioScore * 0.7 + sizeScore * 0.3 });
+      const ratioScore = 1 - Math.min(1, Math.abs(1 - ratio) / 1.6);
+      const sizeScore = Math.min(1, (w * h) / (220 * 220));
+      const pageScore = pageNumber === 1 ? 0.12 : 0;
+      const orderScore = Math.max(0, 0.08 - order * 0.01);
+      candidates.push({ img, w, h, pageNumber, order, score: ratioScore * 0.55 + sizeScore * 0.25 + pageScore + orderScore });
+    };
+
+    for (let pageNumber = 1; pageNumber <= Math.min(pdf.numPages, 3); pageNumber++) {
+      const page = await pdf.getPage(pageNumber);
+      const ops = await page.getOperatorList();
+      for (let i = 0; i < ops.fnArray.length; i++) {
+        const fn = ops.fnArray[i];
+        if (fn !== OPS.paintImageXObject && fn !== OPS.paintJpegXObject && fn !== OPS.paintInlineImageXObject) continue;
+        const arg = ops.argsArray[i]?.[0];
+        const img = typeof arg === 'string' ? await readObjectImage(page, arg) : arg;
+        addCandidate(img, pageNumber, i);
+      }
     }
-    // Sort best candidates first; fall back to any image if none look like a photo
-    candidates.sort((a, b) => b.score - a.score);
+
+    candidates.sort((a, b) => b.score - a.score || a.pageNumber - b.pageNumber || a.order - b.order);
     for (const { img, w, h } of candidates) {
       const canvas = document.createElement('canvas');
       canvas.width = w;
@@ -257,6 +268,13 @@ export async function extractFirstImageFromPDF(file: File): Promise<string> {
               imageData.data[k] = src[j];
               imageData.data[k + 1] = src[j + 1];
               imageData.data[k + 2] = src[j + 2];
+              imageData.data[k + 3] = 255;
+            }
+          } else if (src.length === w * h) {
+            for (let j = 0, k = 0; j < src.length; j++, k += 4) {
+              imageData.data[k] = src[j];
+              imageData.data[k + 1] = src[j];
+              imageData.data[k + 2] = src[j];
               imageData.data[k + 3] = 255;
             }
           } else if (src.length === w * h * 4) {
