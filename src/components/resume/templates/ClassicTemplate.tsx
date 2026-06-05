@@ -40,7 +40,7 @@ export function ClassicTemplate({ data, accentColor, design }: TemplateProps) {
                   {d.dateAlign === 'left' ? <>{dateEl}{roleEl}</> : <>{roleEl}{dateEl}</>}
                 </div>
                 <div className={`flex justify-between ${d.locationAlign === 'left' ? 'flex-row-reverse' : ''}`}>
-                  <p className="text-gray-600 italic">{exp.company}</p>
+                  <p className="font-bold" style={{ color: accentColor }}>{exp.company}</p>
                 </div>
                 <ul className="list-disc list-inside mt-1 text-gray-700" style={{ lineHeight: d.listLineHeight }}>
                   {exp.bullets.filter(b => b).map((b, i) => <li key={i}>{b}</li>)}
