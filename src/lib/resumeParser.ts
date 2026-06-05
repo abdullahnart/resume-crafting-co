@@ -659,7 +659,7 @@ function looksLikeRoleTail(value: string): boolean {
 }
 
 function cleanExperienceBullet(value: string): string {
-  return normalizeLine(value)
+  return stripExperienceFieldLabel(value)
     .replace(/^here\b\s*/i, '')
     .replace(/^(?:months?|month|years?|experience)\b\s*/i, '')
     .replace(DURATION_RE, '')
