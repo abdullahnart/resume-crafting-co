@@ -863,31 +863,18 @@ function parseExperience(text: string): WorkExperience[] {
       bullets: [],
     };
 
-    const blockLines = [...block.lines];
+    const blockLines = [...block.lines].map(stripExperienceFieldLabel).filter(Boolean);
     let lineIndex = 0;
     const firstLine = normalizeLine(blockLines[0] || '');
-    const secondLine = normalizeLine(blockLines[1] || '');
-    const firstCombinedEntry = splitCombinedCompanyRole(firstLine);
-    const firstPipeParts = firstLine.split('|').map(part => part.trim()).filter(Boolean);
+    const headerInfo = parseExperienceHeaderInfo(blockLines[0] || '', blockLines[1] || '');
 
-    if (firstCombinedEntry) {
-      entry.company = firstCombinedEntry.company;
-      entry.role = firstCombinedEntry.role;
-      lineIndex = 1;
-    } else if (firstPipeParts.length >= 2) {
-      entry.company = firstPipeParts[0];
-      entry.role = firstPipeParts.slice(1).join(' | ');
-      lineIndex = 1;
-    } else if (looksLikeStandaloneCompanyLine(firstLine)) {
-      entry.company = firstLine;
-      lineIndex = 1;
-
-      if (looksLikeRoleLine(secondLine)) {
-        entry.role = secondLine;
-        lineIndex = 2;
-      }
+    if (headerInfo) {
+      entry.company = headerInfo.company;
+      entry.role = headerInfo.role;
+      applyDateInfo(entry, headerInfo.dateInfo);
+      lineIndex = headerInfo.consumed;
     } else {
-      entry.company = firstLine;
+      entry.company = cleanExperienceLine(firstLine);
       lineIndex = 1;
     }
 
@@ -905,7 +892,7 @@ function parseExperience(text: string): WorkExperience[] {
     }
 
     for (let i = lineIndex; i < blockLines.length; i++) {
-      const rawLine = blockLines[i];
+      const rawLine = stripExperienceFieldLabel(blockLines[i]);
       const line = normalizeLine(rawLine);
       const isBullet = /^[•\-–—*►▪]\s/.test(rawLine) || /^\d+\.\s/.test(rawLine);
 
