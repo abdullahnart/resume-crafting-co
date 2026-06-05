@@ -703,7 +703,7 @@ function splitCombinedCompanyRole(value: string): { company: string; role: strin
   const normalized = normalizeLine(value);
   if (!normalized || normalized.includes('|')) return null;
   if (!/^[A-Z]/.test(normalized)) return null;
-  if (/^(?:build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating)\b/i.test(normalized)) return null;
+  if (isExperienceFieldLabel(normalized) || NON_COMPANY_START_RE.test(normalized)) return null;
 
   const roleMatch = normalized.match(/\b(?:Internship|Intern|Jr\.?|Junior|Sr\.?|Senior|Lead|Executive|Frontend|Backend|Full\s*Stack|CMS|Wordpress|Developer|Engineer|Designer|Manager|Specialist)\b/i);
   if (!roleMatch || roleMatch.index === undefined || roleMatch.index <= 0) return null;
@@ -715,6 +715,36 @@ function splitCombinedCompanyRole(value: string): { company: string; role: strin
   if (company.split(/\s+/).length < 2) return null;
 
   return { company, role };
+}
+
+function parseExperienceHeaderInfo(rawLine: string, nextRawLine = ''): ExperienceHeaderInfo | null {
+  const line = cleanExperienceLine(stripExperienceFieldLabel(rawLine));
+  const nextLine = cleanExperienceLine(stripExperienceFieldLabel(nextRawLine));
+  const isBullet = /^[•\-–—*►▪]\s/.test(rawLine) || /^\d+\.\s/.test(rawLine);
+  if (isBullet || !line || PAGE_MARKER_RE.test(line) || isKnownSectionHeader(line) || isExperienceFieldLabel(line)) return null;
+
+  const dateInfo = extractDateInfo(rawLine);
+  const combinedEntry = splitCombinedCompanyRole(line);
+  if (combinedEntry) return { ...combinedEntry, consumed: 1, dateInfo };
+
+  const pipeParts = line.split('|').map(part => cleanExperienceLine(part)).filter(Boolean);
+  if (pipeParts.length >= 2 && !looksLikeRoleLabel(pipeParts[0]) && !looksLikeRoleTail(pipeParts[0])) {
+    const companyFirst = looksLikeCompanyName(pipeParts[0]) || !looksLikeCompanyName(pipeParts[pipeParts.length - 1]);
+    const company = companyFirst ? pipeParts[0] : pipeParts[pipeParts.length - 1];
+    const role = companyFirst ? pipeParts.slice(1).join(' | ') : pipeParts.slice(0, -1).join(' | ');
+    return { company, role, consumed: 1, dateInfo };
+  }
+
+  if (looksLikeStandaloneCompanyLine(line)) {
+    return {
+      company: line,
+      role: looksLikeRoleLine(nextLine) ? nextLine : '',
+      consumed: looksLikeRoleLine(nextLine) ? 2 : 1,
+      dateInfo,
+    };
+  }
+
+  return null;
 }
 
 function applyDateInfo(target: Partial<WorkExperience>, dateInfo?: Partial<ExperienceDateInfo> | null) {
