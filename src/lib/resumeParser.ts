@@ -755,21 +755,7 @@ function applyDateInfo(target: Partial<WorkExperience>, dateInfo?: Partial<Exper
 }
 
 function getExperienceHeaderConsumption(rawLine: string, nextRawLine: string): 0 | 1 | 2 {
-  const line = normalizeLine(rawLine);
-  const nextLine = normalizeLine(nextRawLine);
-  const isBullet = /^[•\-–—*►▪]\s/.test(rawLine) || /^\d+\.\s/.test(rawLine);
-  const pipeParts = line.split('|').map(part => part.trim()).filter(Boolean);
-
-  if (isBullet || !line || PAGE_MARKER_RE.test(line) || isKnownSectionHeader(line)) return 0;
-  if (splitCombinedCompanyRole(line)) return 1;
-  if (pipeParts.length >= 2) {
-    if (looksLikeRoleLabel(pipeParts[0]) || looksLikeRoleTail(pipeParts[0])) return 0;
-    return 1;
-  }
-  if (looksLikeStandaloneCompanyLine(line) && looksLikeRoleLine(nextLine)) return 2;
-  if (looksLikeStandaloneCompanyLine(line)) return 1;
-
-  return 0;
+  return parseExperienceHeaderInfo(rawLine, nextRawLine)?.consumed || 0;
 }
 
 function buildExperienceBlocks(text: string): ExperienceBlock[] {
