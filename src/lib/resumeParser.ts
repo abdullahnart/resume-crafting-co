@@ -17,6 +17,12 @@ type StructuredLine = {
 };
 
 type ExperienceDateInfo = Pick<WorkExperience, 'startDate' | 'endDate' | 'current'>;
+type ExperienceHeaderInfo = {
+  company: string;
+  role: string;
+  consumed: 1 | 2;
+  dateInfo?: ExperienceDateInfo | null;
+};
 type ExperienceBlock = {
   prelude: string[];
   lines: string[];
@@ -509,6 +515,10 @@ const DURATION_RE = /(\d+(?:\.\d+)?\s*(?:months?|years?)\s*(?:of\s*)?experience|
 const JOB_TITLE_RE = /\b(?:developer|engineer|designer|manager|internship|intern|executive|lead|specialist)\b/i;
 const ROLE_HINT_RE = /\b(?:jr\.?|sr\.?|junior|senior|lead|principal|staff|assistant|associate|internship|intern|frontend|front\s*end|backend|back\s*end|full\s*stack|cms|wordpress|web|software|product|project|qa|ui|ux)\b/i;
 const ACHIEVEMENT_START_RE = /^(?:advanced|more\s+expertise|theme\s+and\s+plugin\s+customization|wordpress\s+custom\s+functionality|website\s+speed\s+optimization|custom\s+theme\s+development|design\s+email\s+template|psd\s+to\s+wordpress|theme\s+customization|paypal|stripe|expert\s+in|create|created|build|built|custom(?:ize|ized)|develop|developed|design|designed|working|worked|provide|provided|prepare|prepared|write|wrote|coordinate|coordinating|optimi(?:s|z)e(?:d)?|implement|implemented|manage|managed|lead|led)\b/i;
+const EXPERIENCE_FIELD_LABEL_RE = /^(?:key\s+)?(?:responsibilities?|achievements?|duties|tasks?|description|highlights?|accomplishments?)\s*:?$/i;
+const EXPERIENCE_INLINE_LABEL_RE = /^(?:key\s+)?(?:responsibilities?|achievements?|duties|tasks?|description|highlights?|accomplishments?)\s*:?\s*/i;
+const COMPANY_HINT_RE = /\b(?:inc\.?|llc|ltd\.?|pvt\.?|private|limited|labs?|technolog(?:y|ies)|digital|global|solutions?|company|studio|agency|group|systems?|software|consulting|corp(?:oration)?|co\.?)\b/i;
+const NON_COMPANY_START_RE = /^(?:build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating|optimi(?:s|z)ed?|implement(?:ed)?|manage(?:d)?|serv(?:e|ed|ing)|architect(?:ed)?|engineer(?:ed)?|ensur(?:e|ed)|integrat(?:e|ed)|enhanc(?:e|ed)|led?)\b/i;
 const DATE_TOKEN = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s*\\d{4}|\\d{1,2}[/-]\\d{4}|\\d{4}|present|current|now';
 const DATE_RANGE_RE = new RegExp(`(${DATE_TOKEN})\\s*(?:to|-|–|—)\\s*(${DATE_TOKEN})`, 'i');
 const CURRENTLY_WORKING_RE = /currently\s*(?:work|working)(?:\s*here)?/i;
