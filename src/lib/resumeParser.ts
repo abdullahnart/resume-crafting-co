@@ -459,6 +459,13 @@ function splitSections(text: string): Record<string, string> {
     if (PAGE_MARKER_RE.test(trimmed)) continue;
     for (const [key, re] of Object.entries(SECTION_HEADERS)) {
       if (re.test(trimmed)) {
+        if (key === 'experience') {
+          const previous = normalizeSectionCandidate(lines[i - 1] || '');
+          const next = normalizeSectionCandidate(lines[i + 1] || '');
+          const previousLooksLikeDuration = /^(?:\d+(?:\.\d+)?|months?|month|years?|year|of)$/i.test(previous)
+            || DURATION_RE.test(`${previous} ${trimmed}`);
+          if (previousLooksLikeDuration && !looksLikeExperienceEntryStart(next)) continue;
+        }
         sections.push({ key, lineIdx: i });
         break;
       }
