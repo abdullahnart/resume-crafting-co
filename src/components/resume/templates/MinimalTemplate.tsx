@@ -42,7 +42,7 @@ export function MinimalTemplate({ data, accentColor, design }: TemplateProps) {
                   </>
                 )}
               </div>
-              <p className="font-semibold" style={{ color: accentColor }}>{exp.company}</p>
+              <p className="text-gray-500">{exp.company}</p>
               <ul className="mt-1 text-gray-600" style={{ lineHeight: d.listLineHeight }}>
                 {exp.bullets.filter(b => b).map((b, i) => <li key={i}>— {b}</li>)}
               </ul>

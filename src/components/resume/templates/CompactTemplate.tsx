@@ -28,7 +28,7 @@ export function CompactTemplate({ data, accentColor, design }: TemplateProps) {
           <h2 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: accentColor }}>Experience</h2>
           {experience.map(exp => {
             const dateEl = <span className="text-gray-400">{dateRange(exp.startDate, exp.endDate, exp.current, design)}</span>;
-            const titleEl = <span><span className="font-semibold">{exp.role}</span>{exp.company && <span className="font-bold" style={{ color: accentColor }}> · {exp.company}</span>}</span>;
+            const titleEl = <span><span className="font-semibold">{exp.role}</span> · {exp.company}</span>;
             return (
               <div key={exp.id} className="mb-1.5">
                 <div className="flex justify-between">

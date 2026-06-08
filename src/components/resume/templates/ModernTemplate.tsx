@@ -81,7 +81,7 @@ export function ModernTemplate({ data, accentColor, design }: TemplateProps) {
                     </>
                   )}
                 </div>
-                <div className="font-bold text-[10px]" style={{ color: accentColor }}>{exp.company}</div>
+                <div className="text-gray-500 text-[10px]">{exp.company}</div>
                 <ul className="list-disc list-inside mt-1 text-gray-700" style={{ lineHeight: d.listLineHeight }}>
                   {exp.bullets.filter(b => b).map((b, i) => <li key={i}>{b}</li>)}
                 </ul>

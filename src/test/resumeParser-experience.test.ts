@@ -150,46 +150,4 @@ https://sonomarestorations.com/`);
     expect(parsed.education).toHaveLength(3);
     expect(parsed.projects).toHaveLength(9);
   });
-
-  it('does not turn responsibility bullets into companies and still finds portfolio links', () => {
-    const parsed = parseResumeText(`WORK EXPERIENCE
-Proficient Digital
-Senior Frontend Developer
-Responsibilities:
-serving as a creative hub for end-to-end digital solutions.
-Architected and developed custom WordPress themes from scratch, focusing on scalability, performance, and clean code standards.
-Led advanced website development using Elementor & Elementor Pro, delivering dynamic, conversion-focused, and user-centric designs.
-Engineered custom theme and plugin modifications to extend core functionality and meet complex business requirements.
-Just Digital Pvt Ltd
-Jr. Wordpress Developer
-Responsibilities:
-business growth.
-Developed and customized WordPress websites with responsive, user-centric designs.
-PNT Global
-Internship Wordpress Developer
-Build websites using WordPress.
-
-PORTFOLIO LINKS
-bridesforacause.com
-https://slcexcavating.com/
-innerpeaceart.com`);
-
-    expect(parsed.experience).toHaveLength(3);
-    expect(parsed.experience?.[0]).toMatchObject({ company: 'Proficient Digital', role: 'Senior Frontend Developer' });
-    expect(parsed.experience?.[0]?.bullets).toEqual(expect.arrayContaining([
-      'serving as a creative hub for end-to-end digital solutions.',
-      'Architected and developed custom WordPress themes from scratch, focusing on scalability, performance, and clean code standards.',
-      'Engineered custom theme and plugin modifications to extend core functionality and meet complex business requirements.',
-    ]));
-    expect(parsed.experience?.[1]).toMatchObject({ company: 'Just Digital Pvt Ltd', role: 'Jr. Wordpress Developer' });
-    expect(parsed.experience?.[1]?.bullets).toEqual(expect.arrayContaining([
-      'business growth.',
-      'Developed and customized WordPress websites with responsive, user-centric designs.',
-    ]));
-    expect(parsed.projects?.map(project => project.name)).toEqual([
-      'bridesforacause.com',
-      'slcexcavating.com',
-      'innerpeaceart.com',
-    ]);
-  });
 });

@@ -17,12 +17,6 @@ type StructuredLine = {
 };
 
 type ExperienceDateInfo = Pick<WorkExperience, 'startDate' | 'endDate' | 'current'>;
-type ExperienceHeaderInfo = {
-  company: string;
-  role: string;
-  consumed: 1 | 2;
-  dateInfo?: ExperienceDateInfo | null;
-};
 type ExperienceBlock = {
   prelude: string[];
   lines: string[];
@@ -207,50 +201,39 @@ export async function extractFirstImageFromPDF(file: File): Promise<string> {
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+    const page = await pdf.getPage(1);
+    const ops = await page.getOperatorList();
     const OPS = pdfjsLib.OPS;
-    type Candidate = { img: any; w: number; h: number; score: number; pageNumber: number; order: number };
-    const candidates: Candidate[] = [];
-
-    const readObjectImage = async (page: any, name: string): Promise<any> => new Promise(resolve => {
-      const readFrom = (store: any) => {
-        try {
-          store.get(name, (o: any) => resolve(o));
-          return true;
-        } catch {
-          return false;
-        }
-      };
-      if (readFrom(page.objs)) return;
-      if (readFrom(page.commonObjs)) return;
-      resolve(null);
-    });
-
-    const addCandidate = (img: any, pageNumber: number, order: number) => {
-      if (!img) return;
-      const w = img.width || img.bitmap?.width;
-      const h = img.height || img.bitmap?.height;
-      if (!w || !h || w < 24 || h < 24) return;
-      const ratio = w / h;
-      const ratioScore = 1 - Math.min(1, Math.abs(1 - ratio) / 1.6);
-      const sizeScore = Math.min(1, (w * h) / (220 * 220));
-      const pageScore = pageNumber === 1 ? 0.12 : 0;
-      const orderScore = Math.max(0, 0.08 - order * 0.01);
-      candidates.push({ img, w, h, pageNumber, order, score: ratioScore * 0.55 + sizeScore * 0.25 + pageScore + orderScore });
-    };
-
-    for (let pageNumber = 1; pageNumber <= Math.min(pdf.numPages, 3); pageNumber++) {
-      const page = await pdf.getPage(pageNumber);
-      const ops = await page.getOperatorList();
-      for (let i = 0; i < ops.fnArray.length; i++) {
-        const fn = ops.fnArray[i];
-        if (fn !== OPS.paintImageXObject && fn !== OPS.paintJpegXObject && fn !== OPS.paintInlineImageXObject) continue;
+    const imgNames: string[] = [];
+    for (let i = 0; i < ops.fnArray.length; i++) {
+      const fn = ops.fnArray[i];
+      if (fn === OPS.paintImageXObject || fn === OPS.paintJpegXObject || fn === OPS.paintInlineImageXObject) {
         const arg = ops.argsArray[i]?.[0];
-        const img = typeof arg === 'string' ? await readObjectImage(page, arg) : arg;
-        addCandidate(img, pageNumber, i);
+        if (typeof arg === 'string') imgNames.push(arg);
       }
     }
-
-    candidates.sort((a, b) => b.score - a.score || a.pageNumber - b.pageNumber || a.order - b.order);
+    type Candidate = { name: string; img: any; w: number; h: number; score: number };
+    const candidates: Candidate[] = [];
+    for (const name of imgNames) {
+      const img: any = await new Promise(resolve => {
+        try {
+          page.objs.get(name, (o: any) => resolve(o));
+        } catch {
+          resolve(null);
+        }
+      });
+      if (!img) continue;
+      const w = img.width || img.bitmap?.width;
+      const h = img.height || img.bitmap?.height;
+      if (!w || !h || w < 40 || h < 40) continue;
+      const ratio = w / h;
+      // Score: prefer square/portrait images close to ratio 1
+      const ratioScore = 1 - Math.min(1, Math.abs(1 - ratio));
+      const sizeScore = Math.min(1, (w * h) / (300 * 300));
+      candidates.push({ name, img, w, h, score: ratioScore * 0.7 + sizeScore * 0.3 });
+    }
+    // Sort best candidates first; fall back to any image if none look like a photo
+    candidates.sort((a, b) => b.score - a.score);
     for (const { img, w, h } of candidates) {
       const canvas = document.createElement('canvas');
       canvas.width = w;
@@ -268,13 +251,6 @@ export async function extractFirstImageFromPDF(file: File): Promise<string> {
               imageData.data[k] = src[j];
               imageData.data[k + 1] = src[j + 1];
               imageData.data[k + 2] = src[j + 2];
-              imageData.data[k + 3] = 255;
-            }
-          } else if (src.length === w * h) {
-            for (let j = 0, k = 0; j < src.length; j++, k += 4) {
-              imageData.data[k] = src[j];
-              imageData.data[k + 1] = src[j];
-              imageData.data[k + 2] = src[j];
               imageData.data[k + 3] = 255;
             }
           } else if (src.length === w * h * 4) {
@@ -350,7 +326,7 @@ const SECTION_HEADERS: Record<string, RegExp> = {
   skills: /^(?:SKILLS|TECHNICAL\s*SKILLS|CORE\s*COMPETENCIES|PROFICIENCIES|TECHNOLOGIES)\s*$/im,
   languages: /^(?:LANGUAGES?)\s*$/im,
   certifications: /^(?:CERTIFICATIONS?|LICENSES?|CREDENTIALS?)\s*$/im,
-  projects: /^(?:(?:SELECTED\s+|PERSONAL\s+)?PROJECTS?|PROJECT\s+LINKS?|PORTFOLIO(?:\s+LINKS?)?|WORK\s+SAMPLES?|WEBSITES?|LINKS?)\s*$/im,
+  projects: /^(?:PROJECTS?|PORTFOLIO|LINKS?)\s*$/im,
   address: /^(?:ADDRESS|CONTACT)\s*$/im,
 };
 
@@ -369,21 +345,6 @@ function isKnownSectionHeader(line: string): boolean {
   return Object.values(SECTION_HEADERS).some(re => re.test(normalized));
 }
 
-function isRealSectionHeaderAt(lines: string[], index: number): boolean {
-  const trimmed = normalizeSectionCandidate(lines[index] || '');
-  if (!isKnownSectionHeader(trimmed)) return false;
-
-  if (SECTION_HEADERS.experience.test(trimmed)) {
-    const previous = normalizeSectionCandidate(lines[index - 1] || '');
-    const next = normalizeSectionCandidate(lines[index + 1] || '');
-    const previousLooksLikeDuration = /^(?:\d+(?:\.\d+)?|months?|month|years?|year|of)$/i.test(previous)
-      || DURATION_RE.test(`${previous} ${trimmed}`);
-    if (previousLooksLikeDuration && !looksLikeExperienceEntryStart(next)) return false;
-  }
-
-  return true;
-}
-
 function looksLikeExperienceContinuation(text: string): boolean {
   const normalized = text.trim();
   if (!normalized) return false;
@@ -391,11 +352,8 @@ function looksLikeExperienceContinuation(text: string): boolean {
   const bulletCount = (normalized.match(BULLET_LINE_RE) || []).length;
   const hasDateInfo = DATE_RANGE_RE.test(normalized) || DURATION_RE.test(normalized) || CURRENTLY_WORKING_RE.test(normalized);
   const hasRoleKeyword = JOB_TITLE_RE.test(normalized);
-  const lines = normalized.split('\n').map(line => normalizeLine(line)).filter(Boolean);
-  const companyRolePairs = lines.filter((line, index) => looksLikeStandaloneCompanyLine(line) && looksLikeRoleLine(lines[index + 1] || '')).length;
-  const parsedEntries = parseExperience(normalized).length;
 
-  return (hasDateInfo && hasRoleKeyword && (bulletCount >= 2 || companyRolePairs > 0)) || parsedEntries > 0;
+  return bulletCount >= 2 && hasDateInfo && hasRoleKeyword;
 }
 
 function looksLikeExperienceEntryStart(line: string): boolean {
@@ -448,7 +406,7 @@ function moveContinuationBlock(
 
   blocks.forEach((block, index) => {
     const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
-    const nextSectionIndex = lines.findIndex((_, lineIndex) => lineIndex > 0 && isRealSectionHeaderAt(lines, lineIndex));
+    const nextSectionIndex = lines.findIndex((line, lineIndex) => lineIndex > 0 && isKnownSectionHeader(line));
     const candidate = (nextSectionIndex === -1 ? lines : lines.slice(0, nextSectionIndex)).join('\n').trim();
     const remainder = (nextSectionIndex === -1 ? [] : lines.slice(nextSectionIndex)).join('\n').trim();
 
@@ -477,13 +435,6 @@ function splitSections(text: string): Record<string, string> {
     if (PAGE_MARKER_RE.test(trimmed)) continue;
     for (const [key, re] of Object.entries(SECTION_HEADERS)) {
       if (re.test(trimmed)) {
-        if (key === 'experience') {
-          const previous = normalizeSectionCandidate(lines[i - 1] || '');
-          const next = normalizeSectionCandidate(lines[i + 1] || '');
-          const previousLooksLikeDuration = /^(?:\d+(?:\.\d+)?|months?|month|years?|year|of)$/i.test(previous)
-            || DURATION_RE.test(`${previous} ${trimmed}`);
-          if (previousLooksLikeDuration && !looksLikeExperienceEntryStart(next)) continue;
-        }
         sections.push({ key, lineIdx: i });
         break;
       }
@@ -555,13 +506,9 @@ function parsePersonalInfo(header: string, addressSection?: string) {
 // --- Work experience ---
 
 const DURATION_RE = /(\d+(?:\.\d+)?\s*(?:months?|years?)\s*(?:of\s*)?experience|\d+(?:\.\d+)?\s*months?\s*experience)/i;
-const JOB_TITLE_RE = /\\b(?:developer|engineer|designer|manager|internship|intern|executive|lead|specialist|officer|associate|consultant|architect|analyst|coordinator|representative|technician|supervisor|principal|staff|junior|senior|jr\\.?|sr\\.?)\\b/i;
+const JOB_TITLE_RE = /\b(?:developer|engineer|designer|manager|internship|intern|executive|lead|specialist)\b/i;
 const ROLE_HINT_RE = /\b(?:jr\.?|sr\.?|junior|senior|lead|principal|staff|assistant|associate|internship|intern|frontend|front\s*end|backend|back\s*end|full\s*stack|cms|wordpress|web|software|product|project|qa|ui|ux)\b/i;
-const ACHIEVEMENT_START_RE = /^(?:advanced|more\s+expertise|theme\s+and\s+plugin\s+customization|wordpress\s+custom\s+functionality|website\s+speed\s+optimization|custom\s+theme\s+development|design\s+email\s+template|psd\s+to\s+wordpress|theme\s+customization|paypal|stripe|expert\s+in|create|created|build|built|custom(?:ize|ized)|develop|developed|architect(?:ed)?|engineer(?:ed)?|enhanc(?:e|ed)|integrat(?:e|ed)|ensur(?:e|ed)|serv(?:e|ed|ing)|deliver(?:ed|ing)?|design|designed|working|worked|provide|provided|prepare|prepared|write|wrote|coordinate|coordinating|optimi(?:s|z)e(?:d)?|implement|implemented|manage|managed|lead|led)\b/i;
-const EXPERIENCE_FIELD_LABEL_RE = /^(?:key\s+)?(?:responsibilities?|achievements?|duties|tasks?|description|highlights?|accomplishments?)(?:\s+and\s+\w+)?\s*:?$/i;
-const EXPERIENCE_INLINE_LABEL_RE = /^(?:key\s+)?(?:responsibilities?|achievements?|duties|tasks?|description|highlights?|accomplishments?)(?:\s+and\s+\w+)?\s*:?\s*/i;
-const COMPANY_HINT_RE = /\b(?:inc\.?|llc|ltd\.?|pvt\.?|private|limited|labs?|technolog(?:y|ies)|digital|global|solutions?|company|studio|agency|group|systems?|consulting|corp(?:oration)?|co\.?)\b/i;
-const NON_COMPANY_START_RE = /^(?:build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating|optimi(?:s|z)ed?|implement(?:ed)?|manage(?:d)?|serv(?:e|ed|ing)|architect(?:ed)?|engineer(?:ed)?|ensur(?:e|ed)|integrat(?:e|ed)|enhanc(?:e|ed)|led?|lead|leading|improve|improving|streamline|streamlined|increase|increasing|achieve|achieved|handle|handled|execute|executed|personal|portfolio)\b/i;
+const ACHIEVEMENT_START_RE = /^(?:advanced|more\s+expertise|theme\s+and\s+plugin\s+customization|wordpress\s+custom\s+functionality|website\s+speed\s+optimization|custom\s+theme\s+development|design\s+email\s+template|psd\s+to\s+wordpress|theme\s+customization|paypal|stripe|expert\s+in|create|created|build|built|custom(?:ize|ized)|develop|developed|design|designed|working|worked|provide|provided|prepare|prepared|write|wrote|coordinate|coordinating|optimi(?:s|z)e(?:d)?|implement|implemented|manage|managed|lead|led)\b/i;
 const DATE_TOKEN = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s*\\d{4}|\\d{1,2}[/-]\\d{4}|\\d{4}|present|current|now';
 const DATE_RANGE_RE = new RegExp(`(${DATE_TOKEN})\\s*(?:to|-|–|—)\\s*(${DATE_TOKEN})`, 'i');
 const CURRENTLY_WORKING_RE = /currently\s*(?:work|working)(?:\s*here)?/i;
@@ -623,20 +570,8 @@ function isBareExperienceMetadata(value: string): boolean {
 }
 
 function looksLikeCompanyName(value: string): boolean {
-  return COMPANY_HINT_RE.test(value)
+  return /\b(?:ltd|pvt|labs?|technology|digital|global|solutions?|company|studio|agency)\b/i.test(value)
     && !value.includes('|');
-}
-
-function stripExperienceFieldLabel(value: string): string {
-  return normalizeLine(value)
-    .replace(BULLET_PREFIX_RE, '')
-    .replace(/^\d+\.\s+/, '')
-    .replace(EXPERIENCE_INLINE_LABEL_RE, '')
-    .trim();
-}
-
-function isExperienceFieldLabel(value: string): boolean {
-  return EXPERIENCE_FIELD_LABEL_RE.test(normalizeLine(value));
 }
 
 function looksLikeRoleLabel(value: string): boolean {
@@ -655,48 +590,32 @@ function expandExperienceLines(text: string): string[] {
       const trimmed = rawLine.trim();
       if (!trimmed) return [];
 
-      const withoutLabel = stripExperienceFieldLabel(trimmed);
-      if (!withoutLabel) return [];
-
-      const dateRangeMatch = withoutLabel.match(DATE_RANGE_RE);
-      if (dateRangeMatch && dateRangeMatch.index !== undefined && dateRangeMatch.index > 0) {
-        const beforeDate = withoutLabel.slice(0, dateRangeMatch.index).trim();
-        const dateAndAfter = withoutLabel.slice(dateRangeMatch.index).trim();
-        const afterDate = dateAndAfter.replace(DATE_RANGE_RE, '').trim();
-        return [beforeDate, dateRangeMatch[0], afterDate].filter(Boolean);
-      }
-
-      const inlineBulletMatch = withoutLabel.match(/^(.*?)([•►▪].+)$/);
+      const inlineBulletMatch = trimmed.match(/^(.*?)([•►▪].+)$/);
       if (inlineBulletMatch && inlineBulletMatch[1].trim()) {
         return [inlineBulletMatch[1].trim(), inlineBulletMatch[2].trim()];
       }
 
-      return [withoutLabel];
+      return [trimmed];
     });
 }
 
 function looksLikeStandaloneCompanyLine(value: string): boolean {
   const normalized = normalizeLine(value);
   if (!normalized || normalized.includes('|') || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
-  if (isExperienceFieldLabel(normalized)) return false;
-  const achievementCandidate = extractAchievementCandidate(normalized);
-  if (ACHIEVEMENT_START_RE.test(achievementCandidate) || /[.!?]$/.test(achievementCandidate)) return false;
   if (Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
   if (/[.!?]$/.test(normalized)) return false;
-  if (NON_COMPANY_START_RE.test(normalized)) return false;
+  if (/^(?:build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating|optimi(?:s|z)ed?|implement(?:ed)?|manage(?:d)?)\b/i.test(normalized)) return false;
 
   const words = normalized.split(/\s+/).filter(Boolean);
-  if (words.length < 1 || words.length > 7) return false;
+  if (words.length < 2 || words.length > 7) return false;
   if (looksLikeRoleLabel(normalized) && !looksLikeCompanyName(normalized)) return false;
 
-  const isGenericTitle = /^[A-Z][\w&.-]*(?:\s+[A-Z][\w&.-]*){1,3}$/.test(normalized);
-  return looksLikeCompanyName(normalized) || (isGenericTitle && !looksLikeRoleLabel(normalized) && !NON_COMPANY_START_RE.test(normalized));
+  return looksLikeCompanyName(normalized) || /^[A-Z][\w&.-]*(?:\s+[A-Z][\w&.-]*){1,4}$/.test(normalized);
 }
 
 function looksLikeRoleLine(value: string): boolean {
   const normalized = normalizeLine(value);
   if (!normalized || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
-  if (isExperienceFieldLabel(normalized)) return false;
   if (Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
   if (looksLikeStandaloneCompanyLine(normalized) || looksLikeCompanyName(normalized)) return false;
 
@@ -709,7 +628,7 @@ function looksLikeRoleTail(value: string): boolean {
 }
 
 function cleanExperienceBullet(value: string): string {
-  return stripExperienceFieldLabel(value)
+  return normalizeLine(value)
     .replace(/^here\b\s*/i, '')
     .replace(/^(?:months?|month|years?|experience)\b\s*/i, '')
     .replace(DURATION_RE, '')
@@ -724,9 +643,8 @@ function cleanExperienceBullet(value: string): string {
 function looksLikeAchievementLine(value: string): boolean {
   const normalized = extractAchievementCandidate(value);
   if (!normalized || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
-  if (isExperienceFieldLabel(normalized)) return false;
   if (Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
-  if (looksLikeCompanyName(normalized) && !ACHIEVEMENT_START_RE.test(normalized)) return false;
+  if (looksLikeStandaloneCompanyLine(normalized) || looksLikeCompanyName(normalized)) return false;
   if (looksLikeRoleLine(normalized) && !ACHIEVEMENT_START_RE.test(normalized)) return false;
   if (normalized.length < 3 || normalized.length > 220) return false;
 
@@ -739,7 +657,6 @@ function looksLikeAchievementLine(value: string): boolean {
 function looksLikeRoleContinuation(value: string): boolean {
   const normalized = normalizeLine(value);
   if (!normalized || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
-  if (isExperienceFieldLabel(normalized)) return false;
   if (looksLikeCompanyName(normalized)) return false;
   if (Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
   if (/\b(?:months?|month|years?|year|experience)\b/i.test(normalized)) return false;
@@ -753,8 +670,7 @@ function splitCombinedCompanyRole(value: string): { company: string; role: strin
   const normalized = normalizeLine(value);
   if (!normalized || normalized.includes('|')) return null;
   if (!/^[A-Z]/.test(normalized)) return null;
-  if (isExperienceFieldLabel(normalized) || NON_COMPANY_START_RE.test(normalized)) return null;
-  if (ACHIEVEMENT_START_RE.test(normalized)) return null;
+  if (/^(?:build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating)\b/i.test(normalized)) return null;
 
   const roleMatch = normalized.match(/\b(?:Internship|Intern|Jr\.?|Junior|Sr\.?|Senior|Lead|Executive|Frontend|Backend|Full\s*Stack|CMS|Wordpress|Developer|Engineer|Designer|Manager|Specialist)\b/i);
   if (!roleMatch || roleMatch.index === undefined || roleMatch.index <= 0) return null;
@@ -768,36 +684,6 @@ function splitCombinedCompanyRole(value: string): { company: string; role: strin
   return { company, role };
 }
 
-function parseExperienceHeaderInfo(rawLine: string, nextRawLine = ''): ExperienceHeaderInfo | null {
-  const line = cleanExperienceLine(stripExperienceFieldLabel(rawLine));
-  const nextLine = cleanExperienceLine(stripExperienceFieldLabel(nextRawLine));
-  const isBullet = /^[•\-–—*►▪]\s/.test(rawLine) || /^\d+\.\s/.test(rawLine);
-  if (isBullet || !line || PAGE_MARKER_RE.test(line) || isKnownSectionHeader(line) || isExperienceFieldLabel(line)) return null;
-
-  const dateInfo = extractDateInfo(rawLine);
-  const combinedEntry = splitCombinedCompanyRole(line);
-  if (combinedEntry) return { ...combinedEntry, consumed: 1, dateInfo };
-
-  const pipeParts = line.split('|').map(part => cleanExperienceLine(part)).filter(Boolean);
-  if (pipeParts.length >= 2 && !looksLikeRoleLabel(pipeParts[0]) && !looksLikeRoleTail(pipeParts[0])) {
-    const companyFirst = looksLikeCompanyName(pipeParts[0]) || !looksLikeCompanyName(pipeParts[pipeParts.length - 1]);
-    const company = companyFirst ? pipeParts[0] : pipeParts[pipeParts.length - 1];
-    const role = companyFirst ? pipeParts.slice(1).join(' | ') : pipeParts.slice(0, -1).join(' | ');
-    return { company, role, consumed: 1, dateInfo };
-  }
-
-  if (looksLikeStandaloneCompanyLine(line)) {
-    return {
-      company: line,
-      role: looksLikeRoleLine(nextLine) ? nextLine : '',
-      consumed: looksLikeRoleLine(nextLine) ? 2 : 1,
-      dateInfo,
-    };
-  }
-
-  return null;
-}
-
 function applyDateInfo(target: Partial<WorkExperience>, dateInfo?: Partial<ExperienceDateInfo> | null) {
   if (!target || !dateInfo) return;
   if (dateInfo.startDate) target.startDate = dateInfo.startDate;
@@ -806,7 +692,21 @@ function applyDateInfo(target: Partial<WorkExperience>, dateInfo?: Partial<Exper
 }
 
 function getExperienceHeaderConsumption(rawLine: string, nextRawLine: string): 0 | 1 | 2 {
-  return parseExperienceHeaderInfo(rawLine, nextRawLine)?.consumed || 0;
+  const line = normalizeLine(rawLine);
+  const nextLine = normalizeLine(nextRawLine);
+  const isBullet = /^[•\-–—*►▪]\s/.test(rawLine) || /^\d+\.\s/.test(rawLine);
+  const pipeParts = line.split('|').map(part => part.trim()).filter(Boolean);
+
+  if (isBullet || !line || PAGE_MARKER_RE.test(line) || isKnownSectionHeader(line)) return 0;
+  if (splitCombinedCompanyRole(line)) return 1;
+  if (pipeParts.length >= 2) {
+    if (looksLikeRoleLabel(pipeParts[0]) || looksLikeRoleTail(pipeParts[0])) return 0;
+    return 1;
+  }
+  if (looksLikeStandaloneCompanyLine(line) && looksLikeRoleLine(nextLine)) return 2;
+  if (looksLikeStandaloneCompanyLine(line)) return 1;
+
+  return 0;
 }
 
 function buildExperienceBlocks(text: string): ExperienceBlock[] {
@@ -914,18 +814,31 @@ function parseExperience(text: string): WorkExperience[] {
       bullets: [],
     };
 
-    const blockLines = [...block.lines].map(stripExperienceFieldLabel).filter(Boolean);
+    const blockLines = [...block.lines];
     let lineIndex = 0;
     const firstLine = normalizeLine(blockLines[0] || '');
-    const headerInfo = parseExperienceHeaderInfo(blockLines[0] || '', blockLines[1] || '');
+    const secondLine = normalizeLine(blockLines[1] || '');
+    const firstCombinedEntry = splitCombinedCompanyRole(firstLine);
+    const firstPipeParts = firstLine.split('|').map(part => part.trim()).filter(Boolean);
 
-    if (headerInfo) {
-      entry.company = headerInfo.company;
-      entry.role = headerInfo.role;
-      applyDateInfo(entry, headerInfo.dateInfo);
-      lineIndex = headerInfo.consumed;
+    if (firstCombinedEntry) {
+      entry.company = firstCombinedEntry.company;
+      entry.role = firstCombinedEntry.role;
+      lineIndex = 1;
+    } else if (firstPipeParts.length >= 2) {
+      entry.company = firstPipeParts[0];
+      entry.role = firstPipeParts.slice(1).join(' | ');
+      lineIndex = 1;
+    } else if (looksLikeStandaloneCompanyLine(firstLine)) {
+      entry.company = firstLine;
+      lineIndex = 1;
+
+      if (looksLikeRoleLine(secondLine)) {
+        entry.role = secondLine;
+        lineIndex = 2;
+      }
     } else {
-      entry.company = cleanExperienceLine(firstLine);
+      entry.company = firstLine;
       lineIndex = 1;
     }
 
@@ -943,7 +856,7 @@ function parseExperience(text: string): WorkExperience[] {
     }
 
     for (let i = lineIndex; i < blockLines.length; i++) {
-      const rawLine = stripExperienceFieldLabel(blockLines[i]);
+      const rawLine = blockLines[i];
       const line = normalizeLine(rawLine);
       const isBullet = /^[•\-–—*►▪]\s/.test(rawLine) || /^\d+\.\s/.test(rawLine);
 
@@ -985,7 +898,7 @@ function parseExperience(text: string): WorkExperience[] {
         continue;
       }
 
-      if (!entry.role && line.length < 100 && !looksLikeAchievementLine(rawLine)) {
+      if (!entry.role && line.length < 100) {
         entry.role = line;
       }
     }
@@ -1134,58 +1047,24 @@ function parseSummary(text: string): string {
 function parseProjects(text: string): Project[] {
   if (!text) return [];
   const urlRe = /(?:https?:\/\/)?(?:www\.)?[\w.-]+\.[a-z]{2,}(?:\/[^\s]*)?/gi;
-  const seen = new Set<string>();
-  const urls = Array.from(text.matchAll(urlRe))
-    .filter(match => text[Math.max(0, (match.index || 0) - 1)] !== '@')
-    .map(match => match[0].replace(/[),.;]+$/, ''))
-    .filter(url => !/linkedin\.com|gmail\.com|yahoo\.com|outlook\.com|hotmail\.com/i.test(url))
-    .filter(url => {
-      const key = url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '').toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+  const urls = text.match(urlRe) || [];
   
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  if (urls.length > 0 && urls.length >= lines.length / 2) {
-    return urls.map(url => {
-      const cleanUrl = url.startsWith('http') ? url : `https://${url}`;
-      const name = url.replace(/https?:\/\//, '').replace(/www\./, '').replace(/\/$/, '');
-      return { id: uid(), name, description: '', url: cleanUrl };
-    });
-  }
-
-  const projects: Project[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (PAGE_MARKER_RE.test(line) || isKnownSectionHeader(line)) continue;
-    
-    const project: Project = { id: uid(), name: normalizeLine(line), description: '', url: '' };
-    const urlMatch = line.match(urlRe);
-    if (urlMatch) {
-      project.url = urlMatch[0].startsWith('http') ? urlMatch[0] : `https://${urlMatch[0]}`;
-    }
-
-    while (i + 1 < lines.length) {
-      const nextLine = lines[i + 1];
-      if (PAGE_MARKER_RE.test(nextLine) || isKnownSectionHeader(nextLine)) break;
-      if (BULLET_PREFIX_RE.test(nextLine) || nextLine.length > line.length * 1.2) {
-        project.description = [project.description, normalizeLine(nextLine)].filter(Boolean).join(' ');
-        i++;
-      } else {
-        break;
-      }
-    }
-    projects.push(project);
-  }
-  return projects;
+  return urls.map(url => {
+    const cleanUrl = url.startsWith('http') ? url : `https://${url}`;
+    const name = url.replace(/https?:\/\//, '').replace(/www\./, '').replace(/\/$/, '');
+    return {
+      id: uid(),
+      name,
+      description: '',
+      url: cleanUrl,
+    };
+  });
 }
 
 // --- Main export ---
 
 export function parseResumeText(text: string): Partial<ResumeData> {
   const sections = splitSections(text);
-  const projectSource = sections.projects || text;
 
   return {
     personalInfo: parsePersonalInfo(sections.header || '', sections.address),
@@ -1195,6 +1074,6 @@ export function parseResumeText(text: string): Partial<ResumeData> {
     skills: parseSkills(sections.skills || ''),
     languages: [] as Language[],
     certifications: [] as Certification[],
-    projects: parseProjects(projectSource),
+    projects: parseProjects(sections.projects || ''),
   };
 }
