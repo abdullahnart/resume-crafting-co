@@ -676,6 +676,7 @@ function looksLikeStandaloneCompanyLine(value: string): boolean {
   const normalized = normalizeLine(value);
   if (!normalized || normalized.includes('|') || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
   if (isExperienceFieldLabel(normalized)) return false;
+  if (looksLikeAchievementLine(normalized)) return false;
   if (Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
   if (/[.!?]$/.test(normalized)) return false;
   if (NON_COMPANY_START_RE.test(normalized)) return false;
@@ -721,7 +722,7 @@ function looksLikeAchievementLine(value: string): boolean {
   if (!normalized || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
   if (isExperienceFieldLabel(normalized)) return false;
   if (Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
-  if (looksLikeStandaloneCompanyLine(normalized) || looksLikeCompanyName(normalized)) return false;
+  if (looksLikeCompanyName(normalized) && !ACHIEVEMENT_START_RE.test(normalized)) return false;
   if (looksLikeRoleLine(normalized) && !ACHIEVEMENT_START_RE.test(normalized)) return false;
   if (normalized.length < 3 || normalized.length > 220) return false;
 
