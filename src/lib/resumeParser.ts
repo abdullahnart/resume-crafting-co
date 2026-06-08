@@ -391,8 +391,10 @@ function looksLikeExperienceContinuation(text: string): boolean {
   const bulletCount = (normalized.match(BULLET_LINE_RE) || []).length;
   const hasDateInfo = DATE_RANGE_RE.test(normalized) || DURATION_RE.test(normalized) || CURRENTLY_WORKING_RE.test(normalized);
   const hasRoleKeyword = JOB_TITLE_RE.test(normalized);
+  const lines = normalized.split('\n').map(line => normalizeLine(line)).filter(Boolean);
+  const companyRolePairs = lines.filter((line, index) => looksLikeStandaloneCompanyLine(line) && looksLikeRoleLine(lines[index + 1] || '')).length;
 
-  return bulletCount >= 2 && hasDateInfo && hasRoleKeyword;
+  return hasDateInfo && hasRoleKeyword && (bulletCount >= 2 || companyRolePairs > 0);
 }
 
 function looksLikeExperienceEntryStart(line: string): boolean {
