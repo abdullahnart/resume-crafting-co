@@ -981,7 +981,7 @@ function parseExperience(text: string): WorkExperience[] {
         continue;
       }
 
-      if (!entry.role && line.length < 100) {
+      if (!entry.role && line.length < 100 && !looksLikeAchievementLine(rawLine)) {
         entry.role = line;
       }
     }
