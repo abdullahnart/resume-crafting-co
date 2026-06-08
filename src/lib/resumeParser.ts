@@ -558,7 +558,7 @@ const ACHIEVEMENT_START_RE = /^(?:advanced|more\s+expertise|theme\s+and\s+plugin
 const EXPERIENCE_FIELD_LABEL_RE = /^(?:key\s+)?(?:responsibilities?|achievements?|duties|tasks?|description|highlights?|accomplishments?)(?:\s+and\s+\w+)?\s*:?$/i;
 const EXPERIENCE_INLINE_LABEL_RE = /^(?:key\s+)?(?:responsibilities?|achievements?|duties|tasks?|description|highlights?|accomplishments?)(?:\s+and\s+\w+)?\s*:?\s*/i;
 const COMPANY_HINT_RE = /\b(?:inc\.?|llc|ltd\.?|pvt\.?|private|limited|labs?|technolog(?:y|ies)|digital|global|solutions?|company|studio|agency|group|systems?|software|consulting|corp(?:oration)?|co\.?)\b/i;
-const NON_COMPANY_START_RE = /^\b(?:build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating|optimi(?:s|z)ed?|implement(?:ed)?|manage(?:d)?|serv(?:e|ed|ing)|architect(?:ed)?|engineer(?:ed)?|ensur(?:e|ed)|integrat(?:e|ed)|enhanc(?:e|ed)|led?|lead|leading|improve|improving|streamline|streamlined|increase|increasing|achieve|achieved|handle|handled|execute|executed)\b/i;
+const NON_COMPANY_START_RE = /^(?:build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating|optimi(?:s|z)ed?|implement(?:ed)?|manage(?:d)?|serv(?:e|ed|ing)|architect(?:ed)?|engineer(?:ed)?|ensur(?:e|ed)|integrat(?:e|ed)|enhanc(?:e|ed)|led?|lead|leading|improve|improving|streamline|streamlined|increase|increasing|achieve|achieved|handle|handled|execute|executed|personal|portfolio)\b/i;
 const DATE_TOKEN = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s*\\d{4}|\\d{1,2}[/-]\\d{4}|\\d{4}|present|current|now';
 const DATE_RANGE_RE = new RegExp(`(${DATE_TOKEN})\\s*(?:to|-|–|—)\\s*(${DATE_TOKEN})`, 'i');
 const CURRENTLY_WORKING_RE = /currently\s*(?:work|working)(?:\s*here)?/i;
@@ -676,13 +676,14 @@ function looksLikeStandaloneCompanyLine(value: string): boolean {
   const normalized = normalizeLine(value);
   if (!normalized || normalized.includes('|') || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
   if (isExperienceFieldLabel(normalized)) return false;
-  if (looksLikeAchievementLine(normalized)) return false;
+  const achievementCandidate = extractAchievementCandidate(normalized);
+  if (ACHIEVEMENT_START_RE.test(achievementCandidate) || /[.!?]$/.test(achievementCandidate)) return false;
   if (Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
   if (/[.!?]$/.test(normalized)) return false;
   if (NON_COMPANY_START_RE.test(normalized)) return false;
 
   const words = normalized.split(/\s+/).filter(Boolean);
-  if (words.length < 2 || words.length > 7) return false;
+  if (words.length < 1 || words.length > 7) return false;
   if (looksLikeRoleLabel(normalized) && !looksLikeCompanyName(normalized)) return false;
 
   const isGenericTitle = /^[A-Z][\w&.-]*(?:\s+[A-Z][\w&.-]*){1,3}$/.test(normalized);
