@@ -350,7 +350,7 @@ const SECTION_HEADERS: Record<string, RegExp> = {
   skills: /^(?:SKILLS|TECHNICAL\s*SKILLS|CORE\s*COMPETENCIES|PROFICIENCIES|TECHNOLOGIES)\s*$/im,
   languages: /^(?:LANGUAGES?)\s*$/im,
   certifications: /^(?:CERTIFICATIONS?|LICENSES?|CREDENTIALS?)\s*$/im,
-  projects: /^(?:PROJECTS?|PORTFOLIO|LINKS?)\s*$/im,
+  projects: /^(?:(?:SELECTED\s+|PERSONAL\s+)?PROJECTS?|PROJECT\s+LINKS?|PORTFOLIO(?:\s+LINKS?)?|WORK\s+SAMPLES?|WEBSITES?|LINKS?)\s*$/im,
   address: /^(?:ADDRESS|CONTACT)\s*$/im,
 };
 
@@ -554,11 +554,11 @@ function parsePersonalInfo(header: string, addressSection?: string) {
 const DURATION_RE = /(\d+(?:\.\d+)?\s*(?:months?|years?)\s*(?:of\s*)?experience|\d+(?:\.\d+)?\s*months?\s*experience)/i;
 const JOB_TITLE_RE = /\b(?:developer|engineer|designer|manager|internship|intern|executive|lead|specialist)\b/i;
 const ROLE_HINT_RE = /\b(?:jr\.?|sr\.?|junior|senior|lead|principal|staff|assistant|associate|internship|intern|frontend|front\s*end|backend|back\s*end|full\s*stack|cms|wordpress|web|software|product|project|qa|ui|ux)\b/i;
-const ACHIEVEMENT_START_RE = /^(?:advanced|more\s+expertise|theme\s+and\s+plugin\s+customization|wordpress\s+custom\s+functionality|website\s+speed\s+optimization|custom\s+theme\s+development|design\s+email\s+template|psd\s+to\s+wordpress|theme\s+customization|paypal|stripe|expert\s+in|create|created|build|built|custom(?:ize|ized)|develop|developed|design|designed|working|worked|provide|provided|prepare|prepared|write|wrote|coordinate|coordinating|optimi(?:s|z)e(?:d)?|implement|implemented|manage|managed|lead|led)\b/i;
-const EXPERIENCE_FIELD_LABEL_RE = /^(?:key\s+)?(?:responsibilities?|achievements?|duties|tasks?|description|highlights?|accomplishments?)\s*:?$/i;
-const EXPERIENCE_INLINE_LABEL_RE = /^(?:key\s+)?(?:responsibilities?|achievements?|duties|tasks?|description|highlights?|accomplishments?)\s*:?\s*/i;
+const ACHIEVEMENT_START_RE = /^(?:advanced|more\s+expertise|theme\s+and\s+plugin\s+customization|wordpress\s+custom\s+functionality|website\s+speed\s+optimization|custom\s+theme\s+development|design\s+email\s+template|psd\s+to\s+wordpress|theme\s+customization|paypal|stripe|expert\s+in|create|created|build|built|custom(?:ize|ized)|develop|developed|architect(?:ed)?|engineer(?:ed)?|enhanc(?:e|ed)|integrat(?:e|ed)|ensur(?:e|ed)|serv(?:e|ed|ing)|deliver(?:ed|ing)?|design|designed|working|worked|provide|provided|prepare|prepared|write|wrote|coordinate|coordinating|optimi(?:s|z)e(?:d)?|implement|implemented|manage|managed|lead|led)\b/i;
+const EXPERIENCE_FIELD_LABEL_RE = /^(?:key\s+)?(?:responsibilities?|achievements?|duties|tasks?|description|highlights?|accomplishments?)(?:\s+and\s+\w+)?\s*:?$/i;
+const EXPERIENCE_INLINE_LABEL_RE = /^(?:key\s+)?(?:responsibilities?|achievements?|duties|tasks?|description|highlights?|accomplishments?)(?:\s+and\s+\w+)?\s*:?\s*/i;
 const COMPANY_HINT_RE = /\b(?:inc\.?|llc|ltd\.?|pvt\.?|private|limited|labs?|technolog(?:y|ies)|digital|global|solutions?|company|studio|agency|group|systems?|software|consulting|corp(?:oration)?|co\.?)\b/i;
-const NON_COMPANY_START_RE = /^(?:build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating|optimi(?:s|z)ed?|implement(?:ed)?|manage(?:d)?|serv(?:e|ed|ing)|architect(?:ed)?|engineer(?:ed)?|ensur(?:e|ed)|integrat(?:e|ed)|enhanc(?:e|ed)|led?)\b/i;
+const NON_COMPANY_START_RE = /^\b(?:build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating|optimi(?:s|z)ed?|implement(?:ed)?|manage(?:d)?|serv(?:e|ed|ing)|architect(?:ed)?|engineer(?:ed)?|ensur(?:e|ed)|integrat(?:e|ed)|enhanc(?:e|ed)|led?|lead|leading|improve|improving|streamline|streamlined|increase|increasing|achieve|achieved|handle|handled|execute|executed)\b/i;
 const DATE_TOKEN = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s*\\d{4}|\\d{1,2}[/-]\\d{4}|\\d{4}|present|current|now';
 const DATE_RANGE_RE = new RegExp(`(${DATE_TOKEN})\\s*(?:to|-|–|—)\\s*(${DATE_TOKEN})`, 'i');
 const CURRENTLY_WORKING_RE = /currently\s*(?:work|working)(?:\s*here)?/i;
@@ -625,7 +625,11 @@ function looksLikeCompanyName(value: string): boolean {
 }
 
 function stripExperienceFieldLabel(value: string): string {
-  return normalizeLine(value).replace(EXPERIENCE_INLINE_LABEL_RE, '').trim();
+  return normalizeLine(value)
+    .replace(BULLET_PREFIX_RE, '')
+    .replace(/^\d+\.\s*/, '')
+    .replace(EXPERIENCE_INLINE_LABEL_RE, '')
+    .trim();
 }
 
 function isExperienceFieldLabel(value: string): boolean {
@@ -680,7 +684,8 @@ function looksLikeStandaloneCompanyLine(value: string): boolean {
   if (words.length < 2 || words.length > 7) return false;
   if (looksLikeRoleLabel(normalized) && !looksLikeCompanyName(normalized)) return false;
 
-  return looksLikeCompanyName(normalized) || /^[A-Z][\w&.-]*(?:\s+[A-Z][\w&.-]*){1,4}$/.test(normalized);
+  const isGenericTitle = /^[A-Z][\w&.-]*(?:\s+[A-Z][\w&.-]*){1,3}$/.test(normalized);
+  return looksLikeCompanyName(normalized) || (isGenericTitle && !looksLikeRoleLabel(normalized) && !NON_COMPANY_START_RE.test(normalized));
 }
 
 function looksLikeRoleLine(value: string): boolean {
@@ -775,7 +780,7 @@ function parseExperienceHeaderInfo(rawLine: string, nextRawLine = ''): Experienc
     return { company, role, consumed: 1, dateInfo };
   }
 
-  if (looksLikeStandaloneCompanyLine(line)) {
+  if (looksLikeStandaloneCompanyLine(line) || (line.length > 0 && line.length < 50 && looksLikeRoleLine(nextLine))) {
     return {
       company: line,
       role: looksLikeRoleLine(nextLine) ? nextLine : '',
@@ -1125,16 +1130,39 @@ function parseProjects(text: string): Project[] {
   const urlRe = /(?:https?:\/\/)?(?:www\.)?[\w.-]+\.[a-z]{2,}(?:\/[^\s]*)?/gi;
   const urls = text.match(urlRe) || [];
   
-  return urls.map(url => {
-    const cleanUrl = url.startsWith('http') ? url : `https://${url}`;
-    const name = url.replace(/https?:\/\//, '').replace(/www\./, '').replace(/\/$/, '');
-    return {
-      id: uid(),
-      name,
-      description: '',
-      url: cleanUrl,
-    };
-  });
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  if (urls.length > 0 && urls.length >= lines.length / 2) {
+    return urls.map(url => {
+      const cleanUrl = url.startsWith('http') ? url : `https://${url}`;
+      const name = url.replace(/https?:\/\//, '').replace(/www\./, '').replace(/\/$/, '');
+      return { id: uid(), name, description: '', url: cleanUrl };
+    });
+  }
+
+  const projects: Project[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (PAGE_MARKER_RE.test(line) || isKnownSectionHeader(line)) continue;
+    
+    const project: Project = { id: uid(), name: normalizeLine(line), description: '', url: '' };
+    const urlMatch = line.match(urlRe);
+    if (urlMatch) {
+      project.url = urlMatch[0].startsWith('http') ? urlMatch[0] : `https://${urlMatch[0]}`;
+    }
+
+    while (i + 1 < lines.length) {
+      const nextLine = lines[i + 1];
+      if (PAGE_MARKER_RE.test(nextLine) || isKnownSectionHeader(nextLine)) break;
+      if (BULLET_PREFIX_RE.test(nextLine) || nextLine.length > line.length * 1.2) {
+        project.description = [project.description, normalizeLine(nextLine)].filter(Boolean).join(' ');
+        i++;
+      } else {
+        break;
+      }
+    }
+    projects.push(project);
+  }
+  return projects;
 }
 
 // --- Main export ---
