@@ -393,8 +393,9 @@ function looksLikeExperienceContinuation(text: string): boolean {
   const hasRoleKeyword = JOB_TITLE_RE.test(normalized);
   const lines = normalized.split('\n').map(line => normalizeLine(line)).filter(Boolean);
   const companyRolePairs = lines.filter((line, index) => looksLikeStandaloneCompanyLine(line) && looksLikeRoleLine(lines[index + 1] || '')).length;
+  const parsedEntries = parseExperience(normalized).length;
 
-  return hasDateInfo && hasRoleKeyword && (bulletCount >= 2 || companyRolePairs > 0);
+  return (hasDateInfo && hasRoleKeyword && (bulletCount >= 2 || companyRolePairs > 0)) || parsedEntries > 0;
 }
 
 function looksLikeExperienceEntryStart(line: string): boolean {
