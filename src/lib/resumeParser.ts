@@ -754,6 +754,7 @@ function splitCombinedCompanyRole(value: string): { company: string; role: strin
   if (!normalized || normalized.includes('|')) return null;
   if (!/^[A-Z]/.test(normalized)) return null;
   if (isExperienceFieldLabel(normalized) || NON_COMPANY_START_RE.test(normalized)) return null;
+  if (ACHIEVEMENT_START_RE.test(normalized)) return null;
 
   const roleMatch = normalized.match(/\b(?:Internship|Intern|Jr\.?|Junior|Sr\.?|Senior|Lead|Executive|Frontend|Backend|Full\s*Stack|CMS|Wordpress|Developer|Engineer|Designer|Manager|Specialist)\b/i);
   if (!roleMatch || roleMatch.index === undefined || roleMatch.index <= 0) return null;
