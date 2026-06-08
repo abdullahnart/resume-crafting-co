@@ -627,7 +627,7 @@ function looksLikeCompanyName(value: string): boolean {
 function stripExperienceFieldLabel(value: string): string {
   return normalizeLine(value)
     .replace(BULLET_PREFIX_RE, '')
-    .replace(/^\d+\.\s*/, '')
+    .replace(/^\d+\.\s+/, '')
     .replace(EXPERIENCE_INLINE_LABEL_RE, '')
     .trim();
 }
@@ -782,7 +782,7 @@ function parseExperienceHeaderInfo(rawLine: string, nextRawLine = ''): Experienc
     return { company, role, consumed: 1, dateInfo };
   }
 
-  if (looksLikeStandaloneCompanyLine(line) || (line.length > 0 && line.length < 50 && looksLikeRoleLine(nextLine))) {
+  if (looksLikeStandaloneCompanyLine(line)) {
     return {
       company: line,
       role: looksLikeRoleLine(nextLine) ? nextLine : '',
