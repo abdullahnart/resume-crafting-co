@@ -620,6 +620,7 @@ function isBareExperienceMetadata(value: string): boolean {
 function looksLikeCompanyName(value: string): boolean {
   const normalized = normalizeLine(value);
   if (!normalized || normalized.includes('|')) return false;
+  if (normalized.split(/\s+/).length > 8 || /\bis\s+(?:a|an|the)\b/i.test(normalized)) return false;
   if (JOB_TITLE_RE.test(normalized) && !COMPANY_KEYWORD_RE.test(normalized)) return false;
   return COMPANY_KEYWORD_RE.test(normalized);
 }
@@ -780,6 +781,7 @@ function getExperienceHeaderConsumption(rawLine: string, nextRawLine: string): 0
     if (looksLikeRoleLabel(pipeParts[0]) || looksLikeRoleTail(pipeParts[0])) return 0;
     return 1;
   }
+  if (looksLikeDescriptiveRoleLine(line) && looksLikeStandaloneCompanyLine(nextLine)) return 2;
   if (looksLikeStandaloneCompanyLine(line) && looksLikeRoleLine(nextLine)) return 2;
   if (looksLikeStandaloneCompanyLine(line)) return 1;
 
@@ -906,11 +908,15 @@ function parseExperience(text: string): WorkExperience[] {
       entry.company = firstPipeParts[0];
       entry.role = firstPipeParts.slice(1).join(' | ');
       lineIndex = 1;
+    } else if (looksLikeDescriptiveRoleLine(firstLine) && looksLikeStandaloneCompanyLine(secondLine)) {
+      entry.role = firstLine;
+      entry.company = secondLine;
+      lineIndex = 2;
     } else if (looksLikeStandaloneCompanyLine(firstLine)) {
       entry.company = firstLine;
       lineIndex = 1;
 
-      if (looksLikeRoleLine(secondLine)) {
+      if (looksLikeRoleLine(secondLine) || looksLikeDescriptiveRoleLine(secondLine)) {
         entry.role = secondLine;
         lineIndex = 2;
       }
@@ -953,7 +959,7 @@ function parseExperience(text: string): WorkExperience[] {
         if (!cleanExperienceLine(line)) continue;
       }
 
-      if (!entry.role && looksLikeRoleLine(line)) {
+      if (!entry.role && (looksLikeRoleLine(line) || looksLikeDescriptiveRoleLine(line))) {
         entry.role = line;
         continue;
       }
