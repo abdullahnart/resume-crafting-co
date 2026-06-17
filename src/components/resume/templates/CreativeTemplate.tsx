@@ -39,7 +39,7 @@ export function CreativeTemplate({ data, accentColor, design }: TemplateProps) {
             <h2 className="text-sm font-black uppercase mb-2" style={{ color: accentColor }}>▎Experience</h2>
             {experience.map(exp => (
               <div key={exp.id} className="mb-3 pl-3 border-l-2 border-gray-200">
-                <div className="font-bold">{exp.role} <span className="font-normal text-gray-500">@ {exp.company}</span></div>
+                <div className="font-bold">{exp.role} <span className="font-bold" style={{ color: accentColor }}>@ {exp.company}</span></div>
                 <div className={`text-[10px] text-gray-400 ${d.dateAlign === 'left' ? 'text-left' : 'text-right'}`}>{dateRange(exp.startDate, exp.endDate, exp.current, design, '→')}</div>
                 <ul className="mt-1 text-gray-700" style={{ lineHeight: d.listLineHeight }}>
                   {exp.bullets.filter(b => b).map((b, i) => <li key={i}>→ {b}</li>)}
