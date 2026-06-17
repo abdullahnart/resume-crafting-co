@@ -970,6 +970,13 @@ function parseExperience(text: string): WorkExperience[] {
         }
 
         if (!cleanExperienceLine(line)) continue;
+      } else if ((PARTIAL_DATE_RANGE_RE.test(line) || /^\d{1,2}\s*\/\s*\d{4}\s*(?:to|-|–|—)\s*$/i.test(line)) && i + 1 < blockLines.length) {
+        const combinedDateInfo = extractDateInfo(`${line} ${normalizeLine(blockLines[i + 1])}`);
+        if (combinedDateInfo && !entry.startDate && !entry.endDate) {
+          applyDateInfo(entry, combinedDateInfo);
+          i++;
+          continue;
+        }
       }
 
       if (!entry.role && (looksLikeRoleLine(line) || looksLikeDescriptiveRoleLine(line))) {
@@ -1000,6 +1007,11 @@ function parseExperience(text: string): WorkExperience[] {
     }
 
     if (entry.company || entry.role) {
+      if (!entry.startDate && !entry.endDate) {
+        const fallbackDateInfo = extractDateInfo(block.lines.join(' '));
+        if (fallbackDateInfo) applyDateInfo(entry, fallbackDateInfo);
+      }
+
       entries.push({
         id: uid(),
         company: entry.company || '',
