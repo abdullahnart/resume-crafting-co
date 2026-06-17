@@ -388,6 +388,16 @@ function isKnownSectionHeader(line: string): boolean {
   return Object.values(SECTION_HEADERS).some(re => re.test(normalized));
 }
 
+function isDurationExperienceLabel(lines: string[], index: number): boolean {
+  const current = normalizeSectionCandidate(lines[index] || '');
+  if (!/^experience$/i.test(current)) return false;
+  const previousLine = normalizeLine(lines[index - 1] || '');
+  const twoLinesBack = normalizeLine(lines[index - 2] || '');
+  return /^(?:months?|years?)$/i.test(previousLine)
+    || /^(?:\d+(?:\.\d+)?)$/i.test(previousLine)
+    || /(?:months?|years?)\s+of$/i.test(twoLinesBack);
+}
+
 function looksLikeExperienceContinuation(text: string): boolean {
   const normalized = text.trim();
   if (!normalized) return false;
@@ -449,7 +459,7 @@ function moveContinuationBlock(
 
   blocks.forEach((block, index) => {
     const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
-    const nextSectionIndex = lines.findIndex((line, lineIndex) => lineIndex > 0 && isKnownSectionHeader(line));
+    const nextSectionIndex = lines.findIndex((line, lineIndex) => lineIndex > 0 && isKnownSectionHeader(line) && !isDurationExperienceLabel(lines, lineIndex));
     const candidate = (nextSectionIndex === -1 ? lines : lines.slice(0, nextSectionIndex)).join('\n').trim();
     const remainder = (nextSectionIndex === -1 ? [] : lines.slice(nextSectionIndex)).join('\n').trim();
 
@@ -478,12 +488,7 @@ function splitSections(text: string): Record<string, string> {
     if (PAGE_MARKER_RE.test(trimmed)) continue;
     for (const [key, re] of Object.entries(SECTION_HEADERS)) {
       if (re.test(trimmed)) {
-        const previousLine = normalizeLine(lines[i - 1] || '');
-        const twoLinesBack = normalizeLine(lines[i - 2] || '');
-        const isJobDurationLabel = key === 'experience'
-          && /^experience$/i.test(trimmed)
-          && (/^(?:months?|years?)$/i.test(previousLine) || /^(?:\d+(?:\.\d+)?)$/i.test(previousLine) || /(?:months?|years?)\s+of$/i.test(twoLinesBack));
-        if (isJobDurationLabel) continue;
+        if (key === 'experience' && isDurationExperienceLabel(lines, i)) continue;
         sections.push({ key, lineIdx: i });
         break;
       }
