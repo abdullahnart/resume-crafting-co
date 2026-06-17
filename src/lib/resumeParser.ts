@@ -478,6 +478,12 @@ function splitSections(text: string): Record<string, string> {
     if (PAGE_MARKER_RE.test(trimmed)) continue;
     for (const [key, re] of Object.entries(SECTION_HEADERS)) {
       if (re.test(trimmed)) {
+        const previousLine = normalizeLine(lines[i - 1] || '');
+        const twoLinesBack = normalizeLine(lines[i - 2] || '');
+        const isJobDurationLabel = key === 'experience'
+          && /^experience$/i.test(trimmed)
+          && (/^(?:months?|years?)$/i.test(previousLine) || /^(?:\d+(?:\.\d+)?)$/i.test(previousLine) || /(?:months?|years?)\s+of$/i.test(twoLinesBack));
+        if (isJobDurationLabel) continue;
         sections.push({ key, lineIdx: i });
         break;
       }
