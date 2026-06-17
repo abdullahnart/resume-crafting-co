@@ -717,6 +717,7 @@ function looksLikeAchievementLine(value: string): boolean {
   if (normalized.length < 3 || normalized.length > 220) return false;
 
   return ACHIEVEMENT_START_RE.test(normalized)
+    || /^(?:prepare|provide|write)\b/i.test(normalized)
     || /^(?:serving|speciali[sz]ed|business|conversion|code\s+standards|scratch|functionality)\b/i.test(normalized)
     || /^[a-z]/.test(normalized)
     || /[.!?]$/.test(normalized)
