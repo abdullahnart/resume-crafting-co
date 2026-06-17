@@ -549,7 +549,7 @@ function parsePersonalInfo(header: string, addressSection?: string) {
 // --- Work experience ---
 
 const DURATION_RE = /(\d+(?:\.\d+)?\s*(?:months?|years?)\s*(?:of\s*)?experience|\d+(?:\.\d+)?\s*months?\s*experience)/i;
-const JOB_TITLE_RE = /\b(?:developer|engineer|designer|manager|internship|intern|executive|lead|specialist|consultant|architect|analyst|coordinator|administrator|officer|director)\b/i;
+const JOB_TITLE_RE = /\b(?:developer|development|engineer|designer|manager|internship|intern|executive|lead|specialist|consultant|architect|analyst|coordinator|administrator|officer|director)\b/i;
 const ROLE_HINT_RE = /\b(?:jr\.?|sr\.?|junior|senior|lead|principal|staff|assistant|associate|internship|intern|frontend|front\s*end|backend|back\s*end|full\s*stack|cms|wordpress|web|software|product|project|qa|ui|ux)\b/i;
 const ACHIEVEMENT_START_RE = /^(?:advanced|more\s+expertise|theme\s+and\s+plugin\s+customization|wordpress\s+custom\s+functionality|website\s+speed\s+optimization|custom\s+theme\s+development|design\s+email\s+template|psd\s+to\s+wordpress|theme\s+customization|paypal|stripe|expert\s+in|create|created|build|built|custom(?:ize|ized)|develop|developed|design|designed|working|worked|provide|provided|prepare|prepared|write|wrote|coordinate|coordinating|optimi(?:s|z)e(?:d)?|implement|implemented|manage|managed|lead|led)\b/i;
 const DATE_TOKEN = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s*\\d{4}|\\d{1,2}[/-]\\d{4}|\\d{4}|present|current|now';
@@ -630,7 +630,7 @@ function looksLikeRoleLabel(value: string): boolean {
 
   return JOB_TITLE_RE.test(normalized)
     || ROLE_HINT_RE.test(normalized)
-    || /\b(?:developer|engineer|designer|manager|specialist|executive|internship|intern|consultant|architect|analyst|coordinator)\b$/i.test(normalized);
+    || /\b(?:developer|development|engineer|designer|manager|specialist|executive|internship|intern|consultant|architect|analyst|coordinator)\b$/i.test(normalized);
 }
 
 function expandExperienceLines(text: string): string[] {
@@ -730,6 +730,17 @@ function looksLikeRoleContinuation(value: string): boolean {
   if (/^(?:build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating)\b/i.test(normalized)) return false;
   return normalized.length < 100
     && (normalized.includes('|') || JOB_TITLE_RE.test(normalized));
+}
+
+function looksLikeDescriptiveRoleLine(value: string): boolean {
+  const normalized = normalizeLine(value);
+  if (!normalized || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
+  if (BULLET_PREFIX_RE.test(normalized) || Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
+  if (looksLikeStandaloneCompanyLine(normalized) || looksLikeCompanyName(normalized)) return false;
+  if (/^(?:serving|speciali[sz]ed|business|conversion|code\s+standards|scratch|functionality|customization)\b/i.test(normalized)) return false;
+  if (/[.!?]$/.test(normalized) && !/\b(?:development|developer|designer|engineer|manager|specialist|consultant|architect|analyst|coordinator)\b/i.test(normalized)) return false;
+  return normalized.length <= 130
+    && (/\b(?:development|developer|designer|engineer|manager|specialist|consultant|architect|analyst|coordinator|wordpress|shopify|ecommerce|e-commerce|cms|frontend|backend|full\s*stack)\b/i.test(normalized));
 }
 
 function splitCombinedCompanyRole(value: string): { company: string; role: string } | null {
