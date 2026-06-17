@@ -1143,7 +1143,18 @@ function parseSummary(text: string): string {
 function parseProjects(text: string): Project[] {
   if (!text) return [];
   const urlRe = /(?:https?:\/\/)?(?:www\.)?[\w.-]+\.[a-z]{2,}(?:\/[^\s]*)?/gi;
-  const urls = text.match(urlRe) || [];
+  const seen = new Set<string>();
+  const urls = text
+    .split('\n')
+    .filter(line => !EMAIL_RE.test(line) && !/linkedin\.com/i.test(line))
+    .flatMap(line => line.match(urlRe) || [])
+    .map(url => url.replace(/[),.;]+$/, ''))
+    .filter(url => {
+      const key = url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '').toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   
   return urls.map(url => {
     const cleanUrl = url.startsWith('http') ? url : `https://${url}`;
@@ -1161,6 +1172,7 @@ function parseProjects(text: string): Project[] {
 
 export function parseResumeText(text: string): Partial<ResumeData> {
   const sections = splitSections(text);
+  const projects = parseProjects(sections.projects || '');
 
   return {
     personalInfo: parsePersonalInfo(sections.header || '', sections.address),
@@ -1170,6 +1182,6 @@ export function parseResumeText(text: string): Partial<ResumeData> {
     skills: parseSkills(sections.skills || ''),
     languages: [] as Language[],
     certifications: [] as Certification[],
-    projects: parseProjects(sections.projects || ''),
+    projects: projects.length ? projects : parseProjects(text),
   };
 }
