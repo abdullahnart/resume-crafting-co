@@ -195,102 +195,145 @@ export async function extractTextFromPDF(file: File): Promise<string> {
   return pages.join('\n---PAGE_BREAK---\n');
 }
 
+type ImageCandidate = { dataUrl: string; width: number; height: number; pageIndex?: number; score: number };
+
+function scoreProfileImage(width: number, height: number, pageIndex = 0): number {
+  if (!width || !height) return 0;
+  const area = width * height;
+  const ratio = width / height;
+  const ratioScore = ratio >= 0.45 && ratio <= 1.55 ? 1 - Math.min(1, Math.abs(1 - ratio)) : 0.15;
+  const sizeScore = Math.min(1, area / (220 * 220));
+  const pageScore = pageIndex === 0 ? 0.18 : 0;
+  return ratioScore * 0.62 + sizeScore * 0.2 + pageScore;
+}
+
+async function getImageDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
+  return new Promise(resolve => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    image.onerror = () => resolve({ width: 0, height: 0 });
+    image.src = dataUrl;
+  });
+}
+
+function pdfImageToDataUrl(img: any, width: number, height: number): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+
+  if (img.bitmap) {
+    ctx.drawImage(img.bitmap, 0, 0);
+    return canvas.toDataURL('image/jpeg', 0.86);
+  }
+
+  const src = img.data;
+  if (!src) return '';
+  const imageData = ctx.createImageData(width, height);
+
+  if (src.length === width * height * 4) {
+    imageData.data.set(src);
+  } else if (src.length === width * height * 3) {
+    for (let j = 0, k = 0; j < src.length; j += 3, k += 4) {
+      imageData.data[k] = src[j];
+      imageData.data[k + 1] = src[j + 1];
+      imageData.data[k + 2] = src[j + 2];
+      imageData.data[k + 3] = 255;
+    }
+  } else if (src.length === width * height) {
+    for (let j = 0, k = 0; j < src.length; j++, k += 4) {
+      imageData.data[k] = src[j];
+      imageData.data[k + 1] = src[j];
+      imageData.data[k + 2] = src[j];
+      imageData.data[k + 3] = 255;
+    }
+  } else {
+    return '';
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return canvas.toDataURL('image/jpeg', 0.86);
+}
+
+async function resolvePdfImage(page: any, name: string): Promise<any> {
+  return new Promise(resolve => {
+    const finish = (value: any) => resolve(value || null);
+    try {
+      page.objs.get(name, finish);
+    } catch {
+      try {
+        page.commonObjs.get(name, finish);
+      } catch {
+        resolve(null);
+      }
+    }
+  });
+}
+
 export async function extractFirstImageFromPDF(file: File): Promise<string> {
   try {
     const pdfjsLib: any = await import('pdfjs-dist');
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
-    const page = await pdf.getPage(1);
-    const ops = await page.getOperatorList();
     const OPS = pdfjsLib.OPS;
-    const imgNames: string[] = [];
-    for (let i = 0; i < ops.fnArray.length; i++) {
-      const fn = ops.fnArray[i];
-      if (fn === OPS.paintImageXObject || fn === OPS.paintJpegXObject || fn === OPS.paintInlineImageXObject) {
+    const candidates: ImageCandidate[] = [];
+
+    for (let pageIndex = 0; pageIndex < Math.min(pdf.numPages, 3); pageIndex++) {
+      const page = await pdf.getPage(pageIndex + 1);
+      const ops = await page.getOperatorList();
+
+      for (let i = 0; i < ops.fnArray.length; i++) {
+        const fn = ops.fnArray[i];
+        if (fn !== OPS.paintImageXObject && fn !== OPS.paintJpegXObject && fn !== OPS.paintInlineImageXObject) continue;
+
         const arg = ops.argsArray[i]?.[0];
-        if (typeof arg === 'string') imgNames.push(arg);
-      }
-    }
-    type Candidate = { name: string; img: any; w: number; h: number; score: number };
-    const candidates: Candidate[] = [];
-    for (const name of imgNames) {
-      const img: any = await new Promise(resolve => {
-        try {
-          page.objs.get(name, (o: any) => resolve(o));
-        } catch {
-          resolve(null);
-        }
-      });
-      if (!img) continue;
-      const w = img.width || img.bitmap?.width;
-      const h = img.height || img.bitmap?.height;
-      if (!w || !h || w < 40 || h < 40) continue;
-      const ratio = w / h;
-      // Score: prefer square/portrait images close to ratio 1
-      const ratioScore = 1 - Math.min(1, Math.abs(1 - ratio));
-      const sizeScore = Math.min(1, (w * h) / (300 * 300));
-      candidates.push({ name, img, w, h, score: ratioScore * 0.7 + sizeScore * 0.3 });
-    }
-    // Sort best candidates first; fall back to any image if none look like a photo
-    candidates.sort((a, b) => b.score - a.score);
-    for (const { img, w, h } of candidates) {
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) continue;
-      try {
-        if (img.bitmap) {
-          ctx.drawImage(img.bitmap, 0, 0);
-        } else if (img.data) {
-          const imageData = ctx.createImageData(w, h);
-          const src = img.data;
-          if (src.length === w * h * 3) {
-            for (let j = 0, k = 0; j < src.length; j += 3, k += 4) {
-              imageData.data[k] = src[j];
-              imageData.data[k + 1] = src[j + 1];
-              imageData.data[k + 2] = src[j + 2];
-              imageData.data[k + 3] = 255;
-            }
-          } else if (src.length === w * h * 4) {
-            imageData.data.set(src);
-          } else {
-            continue;
-          }
-          ctx.putImageData(imageData, 0, 0);
-        } else {
-          continue;
-        }
-        return canvas.toDataURL('image/jpeg', 0.85);
-      } catch {
-        continue;
+        const img = typeof arg === 'string' ? await resolvePdfImage(page, arg) : arg;
+        if (!img) continue;
+
+        const width = img.width || img.bitmap?.width;
+        const height = img.height || img.bitmap?.height;
+        if (!width || !height || width < 32 || height < 32) continue;
+
+        const dataUrl = pdfImageToDataUrl(img, width, height);
+        if (!dataUrl) continue;
+
+        candidates.push({ dataUrl, width, height, pageIndex, score: scoreProfileImage(width, height, pageIndex) });
       }
     }
 
+    candidates.sort((a, b) => b.score - a.score);
+    return candidates[0]?.dataUrl || '';
   } catch {
-    // ignore
+    return '';
   }
-  return '';
 }
 
 export async function extractFirstImageFromDOCX(file: File): Promise<string> {
   try {
     const mammoth: any = await import('mammoth');
     const arrayBuffer = await file.arrayBuffer();
-    let firstImage = '';
+    const images: string[] = [];
     await mammoth.convertToHtml(
       { arrayBuffer },
       {
         convertImage: mammoth.images.imgElement((image: any) =>
           image.read('base64').then((data: string) => {
-            if (!firstImage) firstImage = `data:${image.contentType};base64,${data}`;
+            images.push(`data:${image.contentType};base64,${data}`);
             return { src: '' };
           })
         ),
       }
     );
-    return firstImage;
+
+    const candidates = await Promise.all(images.map(async dataUrl => {
+      const { width, height } = await getImageDimensions(dataUrl);
+      return { dataUrl, width, height, score: scoreProfileImage(width, height) };
+    }));
+
+    candidates.sort((a, b) => b.score - a.score);
+    return candidates[0]?.dataUrl || images[0] || '';
   } catch {
     return '';
   }
