@@ -369,7 +369,7 @@ const SECTION_HEADERS: Record<string, RegExp> = {
   skills: /^(?:SKILLS|TECHNICAL\s*SKILLS|CORE\s*COMPETENCIES|PROFICIENCIES|TECHNOLOGIES)\s*$/im,
   languages: /^(?:LANGUAGES?)\s*$/im,
   certifications: /^(?:CERTIFICATIONS?|LICENSES?|CREDENTIALS?)\s*$/im,
-  projects: /^(?:PROJECTS?|PORTFOLIO|LINKS?)\s*$/im,
+  projects: /^(?:PROJECTS?|SELECTED\s+PROJECTS?|LIVE\s+PROJECTS?|PROJECT\s+LINKS?|PORTFOLIO|WORK\s+SAMPLES?|WEBSITES?|CLIENTS?|LINKS?)\s*$/im,
   address: /^(?:ADDRESS|CONTACT)\s*$/im,
 };
 
@@ -549,12 +549,13 @@ function parsePersonalInfo(header: string, addressSection?: string) {
 // --- Work experience ---
 
 const DURATION_RE = /(\d+(?:\.\d+)?\s*(?:months?|years?)\s*(?:of\s*)?experience|\d+(?:\.\d+)?\s*months?\s*experience)/i;
-const JOB_TITLE_RE = /\b(?:developer|engineer|designer|manager|internship|intern|executive|lead|specialist)\b/i;
+const JOB_TITLE_RE = /\b(?:developer|engineer|designer|manager|internship|intern|executive|lead|specialist|consultant|architect|analyst|coordinator|administrator|officer|director)\b/i;
 const ROLE_HINT_RE = /\b(?:jr\.?|sr\.?|junior|senior|lead|principal|staff|assistant|associate|internship|intern|frontend|front\s*end|backend|back\s*end|full\s*stack|cms|wordpress|web|software|product|project|qa|ui|ux)\b/i;
 const ACHIEVEMENT_START_RE = /^(?:advanced|more\s+expertise|theme\s+and\s+plugin\s+customization|wordpress\s+custom\s+functionality|website\s+speed\s+optimization|custom\s+theme\s+development|design\s+email\s+template|psd\s+to\s+wordpress|theme\s+customization|paypal|stripe|expert\s+in|create|created|build|built|custom(?:ize|ized)|develop|developed|design|designed|working|worked|provide|provided|prepare|prepared|write|wrote|coordinate|coordinating|optimi(?:s|z)e(?:d)?|implement|implemented|manage|managed|lead|led)\b/i;
 const DATE_TOKEN = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s*\\d{4}|\\d{1,2}[/-]\\d{4}|\\d{4}|present|current|now';
 const DATE_RANGE_RE = new RegExp(`(${DATE_TOKEN})\\s*(?:to|-|–|—)\\s*(${DATE_TOKEN})`, 'i');
 const CURRENTLY_WORKING_RE = /currently\s*(?:work|working)(?:\s*here)?/i;
+const COMPANY_KEYWORD_RE = /\b(?:ltd|limited|pvt|private|inc|llc|corp(?:oration)?|labs?|technolog(?:y|ies)|digital|global|solutions?|company|studio|agency|group|services?|systems?|software|media|enterprises?)\b/i;
 
 function normalizeDateValue(value: string): string {
   const cleaned = normalizeLine(value).replace(/\.$/, '');
