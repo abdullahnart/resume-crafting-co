@@ -747,6 +747,16 @@ function looksLikeDescriptiveRoleLine(value: string): boolean {
     && (/\b(?:development|developer|designer|engineer|manager|specialist|consultant|architect|analyst|coordinator|wordpress|shopify|ecommerce|e-commerce|cms|frontend|backend|full\s*stack)\b/i.test(normalized));
 }
 
+function looksLikeRoleBeforeCompanyLine(value: string): boolean {
+  const normalized = normalizeLine(value);
+  if (!normalized || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
+  if (BULLET_PREFIX_RE.test(normalized) || Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
+  if (looksLikeStandaloneCompanyLine(normalized) || looksLikeCompanyName(normalized)) return false;
+  if (/^(?:serving|speciali[sz]ed|business|conversion|code\s+standards|scratch|functionality)\b/i.test(normalized)) return false;
+  return normalized.length <= 150
+    && /\b(?:development|developer|designer|engineer|manager|specialist|consultant|architect|analyst|coordinator|wordpress|shopify|ecommerce|e-commerce|cms|frontend|backend|full\s*stack)\b/i.test(normalized);
+}
+
 function splitCombinedCompanyRole(value: string): { company: string; role: string } | null {
   const normalized = normalizeLine(value);
   if (!normalized || normalized.includes('|')) return null;
@@ -784,7 +794,7 @@ function getExperienceHeaderConsumption(rawLine: string, nextRawLine: string): 0
     if (looksLikeRoleLabel(pipeParts[0]) || looksLikeRoleTail(pipeParts[0])) return 0;
     return 1;
   }
-  if (looksLikeDescriptiveRoleLine(line) && looksLikeStandaloneCompanyLine(nextLine)) return 2;
+  if (looksLikeRoleBeforeCompanyLine(line) && looksLikeStandaloneCompanyLine(nextLine)) return 2;
   if (looksLikeStandaloneCompanyLine(line) && looksLikeRoleLine(nextLine)) return 2;
   if (looksLikeStandaloneCompanyLine(line)) return 1;
 
@@ -911,7 +921,7 @@ function parseExperience(text: string): WorkExperience[] {
       entry.company = firstPipeParts[0];
       entry.role = firstPipeParts.slice(1).join(' | ');
       lineIndex = 1;
-    } else if (looksLikeDescriptiveRoleLine(firstLine) && looksLikeStandaloneCompanyLine(secondLine)) {
+    } else if (looksLikeRoleBeforeCompanyLine(firstLine) && looksLikeStandaloneCompanyLine(secondLine)) {
       entry.role = firstLine;
       entry.company = secondLine;
       lineIndex = 2;
