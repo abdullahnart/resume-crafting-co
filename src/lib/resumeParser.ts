@@ -835,12 +835,13 @@ function buildExperienceBlocks(text: string): ExperienceBlock[] {
     const headerConsumption = getExperienceHeaderConsumption(rawLine, nextRawLine);
     if (headerConsumption) {
       if (currentBlock.length) {
+        if (trailingMetadata.length) currentBlock.push(...trailingMetadata);
         blocks.push({ prelude: currentPrelude, lines: currentBlock });
-        currentPrelude = trailingMetadata;
+        currentPrelude = [];
+        trailingMetadata = [];
       }
 
       currentBlock = [rawLine];
-      trailingMetadata = [];
 
       if (headerConsumption === 2) {
         currentBlock.push(nextRawLine);
