@@ -716,6 +716,7 @@ function looksLikeAchievementLine(value: string): boolean {
   if (normalized.length < 3 || normalized.length > 220) return false;
 
   return ACHIEVEMENT_START_RE.test(normalized)
+    || /^(?:serving|speciali[sz]ed|business|conversion|code\s+standards|scratch|functionality)\b/i.test(normalized)
     || /^[a-z]/.test(normalized)
     || /[.!?]$/.test(normalized)
     || /\b(?:woocommerce|shopify|webflow|elementor|wordpress|divi|avada|lottie|bigcommerce|wishlist|metafields?|optimization|portfolio|website|theme|plugin|qa|html|css|javascript|php)\b/i.test(normalized);
@@ -981,7 +982,7 @@ function parseExperience(text: string): WorkExperience[] {
         continue;
       }
 
-      if (!entry.role && line.length < 100) {
+      if (!entry.role && !isBullet && line.length < 100) {
         entry.role = line;
       }
     }
