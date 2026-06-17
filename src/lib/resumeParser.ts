@@ -592,6 +592,7 @@ function cleanExperienceLine(line: string): string {
   return normalizeLine(line)
     .replace(DURATION_RE, '')
     .replace(DATE_RANGE_RE, '')
+    .replace(/(?:^|\s)(?:0?[1-9]|1[0-2])\s*\/\s*\d{4}\s*(?:to|-|–|—)\s*(?:(?:0?[1-9]|1[0-2])\s*\/\s*)?(?:\d{4}|present|current|now)(?:\s|$)/ig, ' ')
     .replace(CURRENTLY_WORKING_RE, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
@@ -614,8 +615,10 @@ function isBareExperienceMetadata(value: string): boolean {
 }
 
 function looksLikeCompanyName(value: string): boolean {
-  return /\b(?:ltd|pvt|labs?|technology|digital|global|solutions?|company|studio|agency)\b/i.test(value)
-    && !value.includes('|');
+  const normalized = normalizeLine(value);
+  if (!normalized || normalized.includes('|')) return false;
+  if (JOB_TITLE_RE.test(normalized) && !COMPANY_KEYWORD_RE.test(normalized)) return false;
+  return COMPANY_KEYWORD_RE.test(normalized);
 }
 
 function looksLikeRoleLabel(value: string): boolean {
@@ -648,13 +651,13 @@ function looksLikeStandaloneCompanyLine(value: string): boolean {
   if (!normalized || normalized.includes('|') || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
   if (Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
   if (/[.!?]$/.test(normalized)) return false;
-  if (/^(?:build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating|optimi(?:s|z)ed?|implement(?:ed)?|manage(?:d)?)\b/i.test(normalized)) return false;
+  if (/^(?:serving|speciali[sz]ed|business|conversion|code\s+standards|build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating|optimi(?:s|z)ed?|implement(?:ed)?|manage(?:d)?)\b/i.test(normalized)) return false;
 
   const words = normalized.split(/\s+/).filter(Boolean);
   if (words.length < 2 || words.length > 7) return false;
   if (looksLikeRoleLabel(normalized) && !looksLikeCompanyName(normalized)) return false;
 
-  return looksLikeCompanyName(normalized) || /^[A-Z][\w&.-]*(?:\s+[A-Z][\w&.-]*){1,4}$/.test(normalized);
+  return looksLikeCompanyName(normalized) || /^[A-Z][\w&.-]*(?:\s+(?:[A-Z][\w&.-]*|&)){1,5}$/.test(normalized);
 }
 
 function looksLikeRoleLine(value: string): boolean {
