@@ -556,6 +556,8 @@ const DATE_TOKEN = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(
 const DATE_RANGE_RE = new RegExp(`(${DATE_TOKEN})\\s*(?:to|-|–|—)\\s*(${DATE_TOKEN})`, 'i');
 const CURRENTLY_WORKING_RE = /currently\s*(?:work|working)(?:\s*here)?/i;
 const COMPANY_KEYWORD_RE = /\b(?:ltd|limited|pvt|private|inc|llc|corp(?:oration)?|labs?|technolog(?:y|ies)|digital|global|solutions?|company|studio|agency|group|services?|systems?|software|media|enterprises?)\b/i;
+const PARTIAL_DATE_RANGE_RE = new RegExp(`^\\s*(?:${DATE_TOKEN})\\s*(?:to|-|–|—)\\s*$`, 'i');
+const DATE_RANGE_END_RE = new RegExp(`^\\s*(?:${DATE_TOKEN})\\s*$`, 'i');
 
 function normalizeDateValue(value: string): string {
   const cleaned = normalizeLine(value).replace(/\.$/, '');
@@ -610,6 +612,7 @@ function isBareExperienceMetadata(value: string): boolean {
   const normalized = normalizeLine(value);
   if (!normalized) return true;
   if (PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return true;
+  if (PARTIAL_DATE_RANGE_RE.test(normalized) || /^\d{1,2}\s*\/\s*\d{4}\s*(?:to|-|–|—)\s*$/i.test(normalized)) return true;
   if (CURRENTLY_WORKING_RE.test(normalized) || Boolean(extractDateInfo(normalized))) return true;
   return !extractAchievementCandidate(normalized);
 }
@@ -631,7 +634,7 @@ function looksLikeRoleLabel(value: string): boolean {
 }
 
 function expandExperienceLines(text: string): string[] {
-  return text
+  const baseLines = text
     .split('\n')
     .flatMap(rawLine => {
       const trimmed = rawLine.trim();
@@ -644,6 +647,22 @@ function expandExperienceLines(text: string): string[] {
 
       return [trimmed];
     });
+
+  const mergedLines: string[] = [];
+  for (let i = 0; i < baseLines.length; i++) {
+    const current = baseLines[i];
+    const next = baseLines[i + 1];
+
+    if (next && (PARTIAL_DATE_RANGE_RE.test(normalizeLine(current)) || /^\d{1,2}\s*\/\s*\d{4}\s*(?:to|-|–|—)\s*$/i.test(normalizeLine(current))) && DATE_RANGE_END_RE.test(normalizeLine(next))) {
+      mergedLines.push(`${current} ${next}`.replace(/\s{2,}/g, ' ').trim());
+      i++;
+      continue;
+    }
+
+    mergedLines.push(current);
+  }
+
+  return mergedLines;
 }
 
 function looksLikeStandaloneCompanyLine(value: string): boolean {
