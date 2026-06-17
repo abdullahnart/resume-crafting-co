@@ -44,7 +44,7 @@ export function ProfessionalTemplate({ data, accentColor, design }: TemplateProp
               const titleEl = (
                 <div>
                   <span className="font-bold text-sm">{exp.role}</span>
-                  <span className="font-bold" style={{ color: accentColor }}> | {exp.company}</span>
+                  <span className="text-gray-500"> | {exp.company}</span>
                 </div>
               );
               return (

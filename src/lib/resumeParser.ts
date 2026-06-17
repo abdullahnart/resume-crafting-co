@@ -195,145 +195,102 @@ export async function extractTextFromPDF(file: File): Promise<string> {
   return pages.join('\n---PAGE_BREAK---\n');
 }
 
-type ImageCandidate = { dataUrl: string; width: number; height: number; pageIndex?: number; score: number };
-
-function scoreProfileImage(width: number, height: number, pageIndex = 0): number {
-  if (!width || !height) return 0;
-  const area = width * height;
-  const ratio = width / height;
-  const ratioScore = ratio >= 0.45 && ratio <= 1.55 ? 1 - Math.min(1, Math.abs(1 - ratio)) : 0.15;
-  const sizeScore = Math.min(1, area / (220 * 220));
-  const pageScore = pageIndex === 0 ? 0.18 : 0;
-  return ratioScore * 0.62 + sizeScore * 0.2 + pageScore;
-}
-
-async function getImageDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
-  return new Promise(resolve => {
-    const image = new Image();
-    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
-    image.onerror = () => resolve({ width: 0, height: 0 });
-    image.src = dataUrl;
-  });
-}
-
-function pdfImageToDataUrl(img: any, width: number, height: number): string {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return '';
-
-  if (img.bitmap) {
-    ctx.drawImage(img.bitmap, 0, 0);
-    return canvas.toDataURL('image/jpeg', 0.86);
-  }
-
-  const src = img.data;
-  if (!src) return '';
-  const imageData = ctx.createImageData(width, height);
-
-  if (src.length === width * height * 4) {
-    imageData.data.set(src);
-  } else if (src.length === width * height * 3) {
-    for (let j = 0, k = 0; j < src.length; j += 3, k += 4) {
-      imageData.data[k] = src[j];
-      imageData.data[k + 1] = src[j + 1];
-      imageData.data[k + 2] = src[j + 2];
-      imageData.data[k + 3] = 255;
-    }
-  } else if (src.length === width * height) {
-    for (let j = 0, k = 0; j < src.length; j++, k += 4) {
-      imageData.data[k] = src[j];
-      imageData.data[k + 1] = src[j];
-      imageData.data[k + 2] = src[j];
-      imageData.data[k + 3] = 255;
-    }
-  } else {
-    return '';
-  }
-
-  ctx.putImageData(imageData, 0, 0);
-  return canvas.toDataURL('image/jpeg', 0.86);
-}
-
-async function resolvePdfImage(page: any, name: string): Promise<any> {
-  return new Promise(resolve => {
-    const finish = (value: any) => resolve(value || null);
-    try {
-      page.objs.get(name, finish);
-    } catch {
-      try {
-        page.commonObjs.get(name, finish);
-      } catch {
-        resolve(null);
-      }
-    }
-  });
-}
-
 export async function extractFirstImageFromPDF(file: File): Promise<string> {
   try {
     const pdfjsLib: any = await import('pdfjs-dist');
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+    const page = await pdf.getPage(1);
+    const ops = await page.getOperatorList();
     const OPS = pdfjsLib.OPS;
-    const candidates: ImageCandidate[] = [];
-
-    for (let pageIndex = 0; pageIndex < Math.min(pdf.numPages, 3); pageIndex++) {
-      const page = await pdf.getPage(pageIndex + 1);
-      const ops = await page.getOperatorList();
-
-      for (let i = 0; i < ops.fnArray.length; i++) {
-        const fn = ops.fnArray[i];
-        if (fn !== OPS.paintImageXObject && fn !== OPS.paintJpegXObject && fn !== OPS.paintInlineImageXObject) continue;
-
+    const imgNames: string[] = [];
+    for (let i = 0; i < ops.fnArray.length; i++) {
+      const fn = ops.fnArray[i];
+      if (fn === OPS.paintImageXObject || fn === OPS.paintJpegXObject || fn === OPS.paintInlineImageXObject) {
         const arg = ops.argsArray[i]?.[0];
-        const img = typeof arg === 'string' ? await resolvePdfImage(page, arg) : arg;
-        if (!img) continue;
-
-        const width = img.width || img.bitmap?.width;
-        const height = img.height || img.bitmap?.height;
-        if (!width || !height || width < 32 || height < 32) continue;
-
-        const dataUrl = pdfImageToDataUrl(img, width, height);
-        if (!dataUrl) continue;
-
-        candidates.push({ dataUrl, width, height, pageIndex, score: scoreProfileImage(width, height, pageIndex) });
+        if (typeof arg === 'string') imgNames.push(arg);
+      }
+    }
+    type Candidate = { name: string; img: any; w: number; h: number; score: number };
+    const candidates: Candidate[] = [];
+    for (const name of imgNames) {
+      const img: any = await new Promise(resolve => {
+        try {
+          page.objs.get(name, (o: any) => resolve(o));
+        } catch {
+          resolve(null);
+        }
+      });
+      if (!img) continue;
+      const w = img.width || img.bitmap?.width;
+      const h = img.height || img.bitmap?.height;
+      if (!w || !h || w < 40 || h < 40) continue;
+      const ratio = w / h;
+      // Score: prefer square/portrait images close to ratio 1
+      const ratioScore = 1 - Math.min(1, Math.abs(1 - ratio));
+      const sizeScore = Math.min(1, (w * h) / (300 * 300));
+      candidates.push({ name, img, w, h, score: ratioScore * 0.7 + sizeScore * 0.3 });
+    }
+    // Sort best candidates first; fall back to any image if none look like a photo
+    candidates.sort((a, b) => b.score - a.score);
+    for (const { img, w, h } of candidates) {
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) continue;
+      try {
+        if (img.bitmap) {
+          ctx.drawImage(img.bitmap, 0, 0);
+        } else if (img.data) {
+          const imageData = ctx.createImageData(w, h);
+          const src = img.data;
+          if (src.length === w * h * 3) {
+            for (let j = 0, k = 0; j < src.length; j += 3, k += 4) {
+              imageData.data[k] = src[j];
+              imageData.data[k + 1] = src[j + 1];
+              imageData.data[k + 2] = src[j + 2];
+              imageData.data[k + 3] = 255;
+            }
+          } else if (src.length === w * h * 4) {
+            imageData.data.set(src);
+          } else {
+            continue;
+          }
+          ctx.putImageData(imageData, 0, 0);
+        } else {
+          continue;
+        }
+        return canvas.toDataURL('image/jpeg', 0.85);
+      } catch {
+        continue;
       }
     }
 
-    candidates.sort((a, b) => b.score - a.score);
-    return candidates[0]?.dataUrl || '';
   } catch {
-    return '';
+    // ignore
   }
+  return '';
 }
 
 export async function extractFirstImageFromDOCX(file: File): Promise<string> {
   try {
     const mammoth: any = await import('mammoth');
     const arrayBuffer = await file.arrayBuffer();
-    const images: string[] = [];
+    let firstImage = '';
     await mammoth.convertToHtml(
       { arrayBuffer },
       {
         convertImage: mammoth.images.imgElement((image: any) =>
           image.read('base64').then((data: string) => {
-            images.push(`data:${image.contentType};base64,${data}`);
+            if (!firstImage) firstImage = `data:${image.contentType};base64,${data}`;
             return { src: '' };
           })
         ),
       }
     );
-
-    const candidates = await Promise.all(images.map(async dataUrl => {
-      const { width, height } = await getImageDimensions(dataUrl);
-      return { dataUrl, width, height, score: scoreProfileImage(width, height) };
-    }));
-
-    candidates.sort((a, b) => b.score - a.score);
-    return candidates[0]?.dataUrl || images[0] || '';
+    return firstImage;
   } catch {
     return '';
   }
@@ -369,7 +326,7 @@ const SECTION_HEADERS: Record<string, RegExp> = {
   skills: /^(?:SKILLS|TECHNICAL\s*SKILLS|CORE\s*COMPETENCIES|PROFICIENCIES|TECHNOLOGIES)\s*$/im,
   languages: /^(?:LANGUAGES?)\s*$/im,
   certifications: /^(?:CERTIFICATIONS?|LICENSES?|CREDENTIALS?)\s*$/im,
-  projects: /^(?:PROJECTS?|SELECTED\s+PROJECTS?|LIVE\s+PROJECTS?|PROJECT\s+LINKS?|PORTFOLIO|WORK\s+SAMPLES?|WEBSITES?|CLIENTS?|LINKS?)\s*$/im,
+  projects: /^(?:PROJECTS?|PORTFOLIO|LINKS?)\s*$/im,
   address: /^(?:ADDRESS|CONTACT)\s*$/im,
 };
 
@@ -386,16 +343,6 @@ const normalizeSectionCandidate = (value: string) => normalizeLine(value).replac
 function isKnownSectionHeader(line: string): boolean {
   const normalized = normalizeSectionCandidate(line);
   return Object.values(SECTION_HEADERS).some(re => re.test(normalized));
-}
-
-function isDurationExperienceLabel(lines: string[], index: number): boolean {
-  const current = normalizeSectionCandidate(lines[index] || '');
-  if (!/^experience$/i.test(current)) return false;
-  const previousLine = normalizeLine(lines[index - 1] || '');
-  const twoLinesBack = normalizeLine(lines[index - 2] || '');
-  return /^(?:months?|years?)$/i.test(previousLine)
-    || /^(?:\d+(?:\.\d+)?)$/i.test(previousLine)
-    || /(?:months?|years?)\s+of$/i.test(twoLinesBack);
 }
 
 function looksLikeExperienceContinuation(text: string): boolean {
@@ -459,7 +406,7 @@ function moveContinuationBlock(
 
   blocks.forEach((block, index) => {
     const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
-    const nextSectionIndex = lines.findIndex((line, lineIndex) => lineIndex > 0 && isKnownSectionHeader(line) && !isDurationExperienceLabel(lines, lineIndex));
+    const nextSectionIndex = lines.findIndex((line, lineIndex) => lineIndex > 0 && isKnownSectionHeader(line));
     const candidate = (nextSectionIndex === -1 ? lines : lines.slice(0, nextSectionIndex)).join('\n').trim();
     const remainder = (nextSectionIndex === -1 ? [] : lines.slice(nextSectionIndex)).join('\n').trim();
 
@@ -488,7 +435,6 @@ function splitSections(text: string): Record<string, string> {
     if (PAGE_MARKER_RE.test(trimmed)) continue;
     for (const [key, re] of Object.entries(SECTION_HEADERS)) {
       if (re.test(trimmed)) {
-        if (key === 'experience' && isDurationExperienceLabel(lines, i)) continue;
         sections.push({ key, lineIdx: i });
         break;
       }
@@ -560,15 +506,12 @@ function parsePersonalInfo(header: string, addressSection?: string) {
 // --- Work experience ---
 
 const DURATION_RE = /(\d+(?:\.\d+)?\s*(?:months?|years?)\s*(?:of\s*)?experience|\d+(?:\.\d+)?\s*months?\s*experience)/i;
-const JOB_TITLE_RE = /\b(?:developer|development|engineer|designer|manager|internship|intern|executive|lead|specialist|consultant|architect|analyst|coordinator|administrator|officer|director)\b/i;
+const JOB_TITLE_RE = /\b(?:developer|engineer|designer|manager|internship|intern|executive|lead|specialist)\b/i;
 const ROLE_HINT_RE = /\b(?:jr\.?|sr\.?|junior|senior|lead|principal|staff|assistant|associate|internship|intern|frontend|front\s*end|backend|back\s*end|full\s*stack|cms|wordpress|web|software|product|project|qa|ui|ux)\b/i;
 const ACHIEVEMENT_START_RE = /^(?:advanced|more\s+expertise|theme\s+and\s+plugin\s+customization|wordpress\s+custom\s+functionality|website\s+speed\s+optimization|custom\s+theme\s+development|design\s+email\s+template|psd\s+to\s+wordpress|theme\s+customization|paypal|stripe|expert\s+in|create|created|build|built|custom(?:ize|ized)|develop|developed|design|designed|working|worked|provide|provided|prepare|prepared|write|wrote|coordinate|coordinating|optimi(?:s|z)e(?:d)?|implement|implemented|manage|managed|lead|led)\b/i;
 const DATE_TOKEN = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s*\\d{4}|\\d{1,2}[/-]\\d{4}|\\d{4}|present|current|now';
 const DATE_RANGE_RE = new RegExp(`(${DATE_TOKEN})\\s*(?:to|-|–|—)\\s*(${DATE_TOKEN})`, 'i');
 const CURRENTLY_WORKING_RE = /currently\s*(?:work|working)(?:\s*here)?/i;
-const COMPANY_KEYWORD_RE = /\b(?:ltd|limited|pvt|private|inc|llc|corp(?:oration)?|labs?|technolog(?:y|ies)|digital|global|solutions?|company|studio|agency|group|services?|systems?|software|media|enterprises?)\b/i;
-const PARTIAL_DATE_RANGE_RE = new RegExp(`^\\s*(?:${DATE_TOKEN})\\s*(?:to|-|–|—)\\s*$`, 'i');
-const DATE_RANGE_END_RE = new RegExp(`^\\s*(?:${DATE_TOKEN})\\s*$`, 'i');
 
 function normalizeDateValue(value: string): string {
   const cleaned = normalizeLine(value).replace(/\.$/, '');
@@ -605,7 +548,6 @@ function cleanExperienceLine(line: string): string {
   return normalizeLine(line)
     .replace(DURATION_RE, '')
     .replace(DATE_RANGE_RE, '')
-    .replace(/(?:^|\s)(?:0?[1-9]|1[0-2])\s*\/\s*\d{4}\s*(?:to|-|–|—)\s*(?:(?:0?[1-9]|1[0-2])\s*\/\s*)?(?:\d{4}|present|current|now)(?:\s|$)/ig, ' ')
     .replace(CURRENTLY_WORKING_RE, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
@@ -623,17 +565,13 @@ function isBareExperienceMetadata(value: string): boolean {
   const normalized = normalizeLine(value);
   if (!normalized) return true;
   if (PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return true;
-  if (PARTIAL_DATE_RANGE_RE.test(normalized) || /^\d{1,2}\s*\/\s*\d{4}\s*(?:to|-|–|—)\s*$/i.test(normalized)) return true;
   if (CURRENTLY_WORKING_RE.test(normalized) || Boolean(extractDateInfo(normalized))) return true;
   return !extractAchievementCandidate(normalized);
 }
 
 function looksLikeCompanyName(value: string): boolean {
-  const normalized = normalizeLine(value);
-  if (!normalized || normalized.includes('|')) return false;
-  if (normalized.split(/\s+/).length > 8 || /\bis\s+(?:a|an|the)\b/i.test(normalized)) return false;
-  if (JOB_TITLE_RE.test(normalized) && !COMPANY_KEYWORD_RE.test(normalized)) return false;
-  return COMPANY_KEYWORD_RE.test(normalized);
+  return /\b(?:ltd|pvt|labs?|technology|digital|global|solutions?|company|studio|agency)\b/i.test(value)
+    && !value.includes('|');
 }
 
 function looksLikeRoleLabel(value: string): boolean {
@@ -642,11 +580,11 @@ function looksLikeRoleLabel(value: string): boolean {
 
   return JOB_TITLE_RE.test(normalized)
     || ROLE_HINT_RE.test(normalized)
-    || /\b(?:developer|development|engineer|designer|manager|specialist|executive|internship|intern|consultant|architect|analyst|coordinator)\b$/i.test(normalized);
+    || /\b(?:developer|engineer|designer|manager|specialist|executive|internship|intern|consultant|architect|analyst|coordinator)\b$/i.test(normalized);
 }
 
 function expandExperienceLines(text: string): string[] {
-  const baseLines = text
+  return text
     .split('\n')
     .flatMap(rawLine => {
       const trimmed = rawLine.trim();
@@ -659,22 +597,6 @@ function expandExperienceLines(text: string): string[] {
 
       return [trimmed];
     });
-
-  const mergedLines: string[] = [];
-  for (let i = 0; i < baseLines.length; i++) {
-    const current = baseLines[i];
-    const next = baseLines[i + 1];
-
-    if (next && (PARTIAL_DATE_RANGE_RE.test(normalizeLine(current)) || /^\d{1,2}\s*\/\s*\d{4}\s*(?:to|-|–|—)\s*$/i.test(normalizeLine(current))) && DATE_RANGE_END_RE.test(normalizeLine(next))) {
-      mergedLines.push(`${current} ${next}`.replace(/\s{2,}/g, ' ').trim());
-      i++;
-      continue;
-    }
-
-    mergedLines.push(current);
-  }
-
-  return mergedLines;
 }
 
 function looksLikeStandaloneCompanyLine(value: string): boolean {
@@ -682,19 +604,18 @@ function looksLikeStandaloneCompanyLine(value: string): boolean {
   if (!normalized || normalized.includes('|') || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
   if (Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
   if (/[.!?]$/.test(normalized)) return false;
-  if (/^(?:serving|speciali[sz]ed|business|conversion|code\s+standards|build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating|optimi(?:s|z)ed?|implement(?:ed)?|manage(?:d)?)\b/i.test(normalized)) return false;
+  if (/^(?:build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating|optimi(?:s|z)ed?|implement(?:ed)?|manage(?:d)?)\b/i.test(normalized)) return false;
 
   const words = normalized.split(/\s+/).filter(Boolean);
   if (words.length < 2 || words.length > 7) return false;
   if (looksLikeRoleLabel(normalized) && !looksLikeCompanyName(normalized)) return false;
 
-  return looksLikeCompanyName(normalized) || /^[A-Z][\w&.-]*(?:\s+(?:[A-Z][\w&.-]*|&)){1,5}$/.test(normalized);
+  return looksLikeCompanyName(normalized) || /^[A-Z][\w&.-]*(?:\s+[A-Z][\w&.-]*){1,4}$/.test(normalized);
 }
 
 function looksLikeRoleLine(value: string): boolean {
   const normalized = normalizeLine(value);
   if (!normalized || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
-  if (BULLET_PREFIX_RE.test(normalized) || ACHIEVEMENT_START_RE.test(normalized)) return false;
   if (Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
   if (looksLikeStandaloneCompanyLine(normalized) || looksLikeCompanyName(normalized)) return false;
 
@@ -728,8 +649,6 @@ function looksLikeAchievementLine(value: string): boolean {
   if (normalized.length < 3 || normalized.length > 220) return false;
 
   return ACHIEVEMENT_START_RE.test(normalized)
-    || /^(?:prepare|provide|write)\b/i.test(normalized)
-    || /^(?:serving|speciali[sz]ed|business|conversion|code\s+standards|scratch|functionality)\b/i.test(normalized)
     || /^[a-z]/.test(normalized)
     || /[.!?]$/.test(normalized)
     || /\b(?:woocommerce|shopify|webflow|elementor|wordpress|divi|avada|lottie|bigcommerce|wishlist|metafields?|optimization|portfolio|website|theme|plugin|qa|html|css|javascript|php)\b/i.test(normalized);
@@ -745,28 +664,6 @@ function looksLikeRoleContinuation(value: string): boolean {
   if (/^(?:build|create|created|customized|developed|design|designed|working|worked|provide|provided|prepare|prepared|coordinate|coordinating)\b/i.test(normalized)) return false;
   return normalized.length < 100
     && (normalized.includes('|') || JOB_TITLE_RE.test(normalized));
-}
-
-function looksLikeDescriptiveRoleLine(value: string): boolean {
-  const normalized = normalizeLine(value);
-  if (!normalized || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
-  if (BULLET_PREFIX_RE.test(normalized) || Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
-  if (ACHIEVEMENT_START_RE.test(normalized)) return false;
-  if (looksLikeStandaloneCompanyLine(normalized) || looksLikeCompanyName(normalized)) return false;
-  if (/^(?:serving|speciali[sz]ed|business|conversion|code\s+standards|scratch|functionality|customization)\b/i.test(normalized)) return false;
-  if (/[.!?]$/.test(normalized) && !/\b(?:development|developer|designer|engineer|manager|specialist|consultant|architect|analyst|coordinator)\b/i.test(normalized)) return false;
-  return normalized.length <= 130
-    && (/\b(?:development|developer|designer|engineer|manager|specialist|consultant|architect|analyst|coordinator|wordpress|shopify|ecommerce|e-commerce|cms|frontend|backend|full\s*stack)\b/i.test(normalized));
-}
-
-function looksLikeRoleBeforeCompanyLine(value: string): boolean {
-  const normalized = normalizeLine(value);
-  if (!normalized || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
-  if (BULLET_PREFIX_RE.test(normalized) || Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
-  if (looksLikeStandaloneCompanyLine(normalized) || looksLikeCompanyName(normalized)) return false;
-  if (/^(?:serving|speciali[sz]ed|business|conversion|code\s+standards|scratch|functionality)\b/i.test(normalized)) return false;
-  return normalized.length <= 150
-    && /\b(?:development|developer|designer|engineer|manager|specialist|consultant|architect|analyst|coordinator|wordpress|shopify|ecommerce|e-commerce|cms|frontend|backend|full\s*stack)\b/i.test(normalized);
 }
 
 function splitCombinedCompanyRole(value: string): { company: string; role: string } | null {
@@ -806,7 +703,6 @@ function getExperienceHeaderConsumption(rawLine: string, nextRawLine: string): 0
     if (looksLikeRoleLabel(pipeParts[0]) || looksLikeRoleTail(pipeParts[0])) return 0;
     return 1;
   }
-  if (looksLikeRoleBeforeCompanyLine(line) && looksLikeStandaloneCompanyLine(nextLine)) return 2;
   if (looksLikeStandaloneCompanyLine(line) && looksLikeRoleLine(nextLine)) return 2;
   if (looksLikeStandaloneCompanyLine(line)) return 1;
 
@@ -846,13 +742,12 @@ function buildExperienceBlocks(text: string): ExperienceBlock[] {
     const headerConsumption = getExperienceHeaderConsumption(rawLine, nextRawLine);
     if (headerConsumption) {
       if (currentBlock.length) {
-        if (trailingMetadata.length) currentBlock.push(...trailingMetadata);
         blocks.push({ prelude: currentPrelude, lines: currentBlock });
-        currentPrelude = [];
-        trailingMetadata = [];
+        currentPrelude = trailingMetadata;
       }
 
       currentBlock = [rawLine];
+      trailingMetadata = [];
 
       if (headerConsumption === 2) {
         currentBlock.push(nextRawLine);
@@ -934,15 +829,11 @@ function parseExperience(text: string): WorkExperience[] {
       entry.company = firstPipeParts[0];
       entry.role = firstPipeParts.slice(1).join(' | ');
       lineIndex = 1;
-    } else if (looksLikeRoleBeforeCompanyLine(firstLine) && looksLikeStandaloneCompanyLine(secondLine)) {
-      entry.role = firstLine;
-      entry.company = secondLine;
-      lineIndex = 2;
     } else if (looksLikeStandaloneCompanyLine(firstLine)) {
       entry.company = firstLine;
       lineIndex = 1;
 
-      if (looksLikeRoleLine(secondLine) || looksLikeDescriptiveRoleLine(secondLine)) {
+      if (looksLikeRoleLine(secondLine)) {
         entry.role = secondLine;
         lineIndex = 2;
       }
@@ -983,16 +874,9 @@ function parseExperience(text: string): WorkExperience[] {
         }
 
         if (!cleanExperienceLine(line)) continue;
-      } else if ((PARTIAL_DATE_RANGE_RE.test(line) || /^\d{1,2}\s*\/\s*\d{4}\s*(?:to|-|–|—)\s*$/i.test(line)) && i + 1 < blockLines.length) {
-        const combinedDateInfo = extractDateInfo(`${line} ${normalizeLine(blockLines[i + 1])}`);
-        if (combinedDateInfo && !entry.startDate && !entry.endDate) {
-          applyDateInfo(entry, combinedDateInfo);
-          i++;
-          continue;
-        }
       }
 
-      if (!entry.role && (looksLikeRoleLine(line) || looksLikeDescriptiveRoleLine(line))) {
+      if (!entry.role && looksLikeRoleLine(line)) {
         entry.role = line;
         continue;
       }
@@ -1014,17 +898,12 @@ function parseExperience(text: string): WorkExperience[] {
         continue;
       }
 
-      if (!entry.role && !isBullet && line.length < 100) {
+      if (!entry.role && line.length < 100) {
         entry.role = line;
       }
     }
 
     if (entry.company || entry.role) {
-      if (!entry.startDate && !entry.endDate) {
-        const fallbackDateInfo = extractDateInfo(block.lines.join(' '));
-        if (fallbackDateInfo) applyDateInfo(entry, fallbackDateInfo);
-      }
-
       entries.push({
         id: uid(),
         company: entry.company || '',
@@ -1168,18 +1047,7 @@ function parseSummary(text: string): string {
 function parseProjects(text: string): Project[] {
   if (!text) return [];
   const urlRe = /(?:https?:\/\/)?(?:www\.)?[\w.-]+\.[a-z]{2,}(?:\/[^\s]*)?/gi;
-  const seen = new Set<string>();
-  const urls = text
-    .split('\n')
-    .filter(line => !EMAIL_RE.test(line) && !/linkedin\.com/i.test(line))
-    .flatMap(line => line.match(urlRe) || [])
-    .map(url => url.replace(/[),.;]+$/, ''))
-    .filter(url => {
-      const key = url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '').toLowerCase();
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+  const urls = text.match(urlRe) || [];
   
   return urls.map(url => {
     const cleanUrl = url.startsWith('http') ? url : `https://${url}`;
@@ -1197,7 +1065,6 @@ function parseProjects(text: string): Project[] {
 
 export function parseResumeText(text: string): Partial<ResumeData> {
   const sections = splitSections(text);
-  const projects = parseProjects(sections.projects || '');
 
   return {
     personalInfo: parsePersonalInfo(sections.header || '', sections.address),
@@ -1207,6 +1074,6 @@ export function parseResumeText(text: string): Partial<ResumeData> {
     skills: parseSkills(sections.skills || ''),
     languages: [] as Language[],
     certifications: [] as Certification[],
-    projects: projects.length ? projects : parseProjects(text),
+    projects: parseProjects(sections.projects || ''),
   };
 }
