@@ -683,6 +683,7 @@ function looksLikeStandaloneCompanyLine(value: string): boolean {
 function looksLikeRoleLine(value: string): boolean {
   const normalized = normalizeLine(value);
   if (!normalized || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
+  if (BULLET_PREFIX_RE.test(normalized) || ACHIEVEMENT_START_RE.test(normalized)) return false;
   if (Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
   if (looksLikeStandaloneCompanyLine(normalized) || looksLikeCompanyName(normalized)) return false;
 
@@ -738,6 +739,7 @@ function looksLikeDescriptiveRoleLine(value: string): boolean {
   const normalized = normalizeLine(value);
   if (!normalized || PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return false;
   if (BULLET_PREFIX_RE.test(normalized) || Boolean(extractDateInfo(normalized)) || CURRENTLY_WORKING_RE.test(normalized)) return false;
+  if (ACHIEVEMENT_START_RE.test(normalized)) return false;
   if (looksLikeStandaloneCompanyLine(normalized) || looksLikeCompanyName(normalized)) return false;
   if (/^(?:serving|speciali[sz]ed|business|conversion|code\s+standards|scratch|functionality|customization)\b/i.test(normalized)) return false;
   if (/[.!?]$/.test(normalized) && !/\b(?:development|developer|designer|engineer|manager|specialist|consultant|architect|analyst|coordinator)\b/i.test(normalized)) return false;
