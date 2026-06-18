@@ -19,7 +19,7 @@ export function ResumeUploader() {
     try {
       const text = await extractTextFromFile(file);
       const parsed = parseResumeText(text);
-      const photo = await extractFirstImageFromFile(file).catch(() => '');
+      const photoPromise = extractFirstImageFromFile(file).catch(() => '');
 
       setData(prev => ({
         ...prev,
@@ -28,7 +28,6 @@ export function ResumeUploader() {
           ...Object.fromEntries(
             Object.entries(parsed.personalInfo || {}).filter(([, v]) => v)
           ),
-          ...(photo ? { photo } : {}),
         },
         summary: parsed.summary || prev.summary,
         experience: parsed.experience?.length ? parsed.experience : prev.experience,
@@ -45,6 +44,17 @@ export function ResumeUploader() {
         description: 'Your data has been extracted and filled in. Please review each section.',
       });
       setTimeout(() => setStatus('idle'), 3000);
+
+      photoPromise.then(photo => {
+        if (!photo) return;
+        setData(prev => ({
+          ...prev,
+          personalInfo: {
+            ...prev.personalInfo,
+            photo,
+          },
+        }));
+      });
     } catch (err: any) {
       setStatus('error');
       toast({
