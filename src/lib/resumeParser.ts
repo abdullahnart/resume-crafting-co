@@ -708,7 +708,7 @@ function extractDateInfo(line: string): ExperienceDateInfo | null {
 }
 
 function cleanExperienceLine(line: string): string {
-  return normalizeLine(line)
+  return cleanPdfSpacing(line)
     .replace(DURATION_RE, '')
     .replace(DATE_RANGE_RE, '')
     .replace(CURRENTLY_WORKING_RE, '')
@@ -791,7 +791,7 @@ function looksLikeRoleTail(value: string): boolean {
 }
 
 function cleanExperienceBullet(value: string): string {
-  return normalizeLine(value)
+  return cleanPdfSpacing(value)
     .replace(/^here\b\s*/i, '')
     .replace(/^(?:months?|month|years?|experience)\b\s*/i, '')
     .replace(DURATION_RE, '')
