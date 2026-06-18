@@ -105,7 +105,7 @@ function splitLineAtSectionHeadings(line: StructuredLine): StructuredLine[] {
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
   return new Promise(resolve => {
     let settled = false;
-    const timer = window.setTimeout(() => {
+    const timer = globalThis.setTimeout(() => {
       if (!settled) {
         settled = true;
         resolve(fallback);
@@ -116,14 +116,14 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Pr
       .then(value => {
         if (!settled) {
           settled = true;
-          window.clearTimeout(timer);
+          globalThis.clearTimeout(timer);
           resolve(value);
         }
       })
       .catch(() => {
         if (!settled) {
           settled = true;
-          window.clearTimeout(timer);
+          globalThis.clearTimeout(timer);
           resolve(fallback);
         }
       });
