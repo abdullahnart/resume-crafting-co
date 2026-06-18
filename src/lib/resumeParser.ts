@@ -30,106 +30,6 @@ const BULLET_PREFIX_RE = /^[•\-–—*►▪]\s*/;
 
 const normalizeStructuredText = (value: string) => value.replace(/\s+/g, ' ').trim();
 
-const STRUCTURAL_SECTION_WORDS = new Set([
-  'WORK',
-  'EXPERIENCE',
-  'WORK EXPERIENCE',
-  'WORK HISTORY',
-  'EMPLOYMENT',
-  'PROFESSIONAL EXPERIENCE',
-  'ADDRESS',
-  'CONTACT',
-  'ABOUT ME',
-  'SUMMARY',
-  'OBJECTIVE',
-  'PROFILE',
-  'PROFESSIONAL SUMMARY',
-  'SKILLS',
-  'TECHNICAL SKILLS',
-  'CORE COMPETENCIES',
-  'PROFICIENCIES',
-  'TECHNOLOGIES',
-  'EDUCATION',
-  'ACADEMIC',
-  'QUALIFICATIONS',
-  'LANGUAGE',
-  'LANGUAGES',
-  'CERTIFICATION',
-  'CERTIFICATIONS',
-  'LICENSE',
-  'LICENSES',
-  'CREDENTIALS',
-  'PROJECT',
-  'PROJECTS',
-  'PORTFOLIO',
-  'LINKS',
-]);
-
-const isStructuralSectionHeading = (value: string) => STRUCTURAL_SECTION_WORDS.has(normalizeStructuredText(value).replace(/:$/, '').toUpperCase());
-
-function splitLineAtSectionHeadings(line: StructuredLine): StructuredLine[] {
-  const raw = normalizeStructuredText(line.text);
-  const pattern = /\b(?:WORK\s+EXPERIENCE|WORK\s+HISTORY|EMPLOYMENT|PROFESSIONAL\s+EXPERIENCE|ADDRESS|CONTACT|ABOUT\s+ME|SUMMARY|OBJECTIVE|PROFILE|PROFESSIONAL\s+SUMMARY|SKILLS|TECHNICAL\s+SKILLS|CORE\s+COMPETENCIES|PROFICIENCIES|TECHNOLOGIES|EDUCATION|ACADEMIC|QUALIFICATIONS|LANGUAGES?|CERTIFICATIONS?|LICENSES?|CREDENTIALS|PROJECTS?|PORTFOLIO|LINKS):?\b/gi;
-  const matches = Array.from(raw.matchAll(pattern)).filter(match => match.index !== undefined && isStructuralSectionHeading(match[0]));
-  if (!matches.length) return [line];
-
-  const pieces: string[] = [];
-  let cursor = 0;
-
-  for (const match of matches) {
-    const index = match.index || 0;
-    if (index > cursor) pieces.push(raw.slice(cursor, index).trim());
-    pieces.push(match[0].trim());
-    cursor = index + match[0].length;
-  }
-
-  if (cursor < raw.length) pieces.push(raw.slice(cursor).trim());
-  const cleanPieces = pieces.filter(Boolean);
-  if (cleanPieces.length <= 1) return [line];
-
-  const approximateCharWidth = raw.length ? line.width / raw.length : line.width;
-  let offset = 0;
-
-  return cleanPieces.map(piece => {
-    const index = raw.indexOf(piece, offset);
-    if (index >= 0) offset = index + piece.length;
-    return {
-      ...line,
-      text: piece,
-      x: line.x + Math.max(0, index) * approximateCharWidth,
-      width: Math.max(approximateCharWidth * piece.length, 1),
-    };
-  });
-}
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
-  return new Promise(resolve => {
-    let settled = false;
-    const timer = globalThis.setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        resolve(fallback);
-      }
-    }, timeoutMs);
-
-    promise
-      .then(value => {
-        if (!settled) {
-          settled = true;
-          globalThis.clearTimeout(timer);
-          resolve(value);
-        }
-      })
-      .catch(() => {
-        if (!settled) {
-          settled = true;
-          globalThis.clearTimeout(timer);
-          resolve(fallback);
-        }
-      });
-  });
-}
-
 function buildStructuredLines(pageItems: PositionedTextItem[]): StructuredLine[] {
   const lineMap = new Map<number, Array<{ str: string; x: number; width: number }>>();
 
@@ -208,7 +108,7 @@ async function extractTextWithStructure(page: any): Promise<string> {
       width: item.width || item.str.length * 5,
     }));
 
-  const lines = buildStructuredLines(items).flatMap(splitLineAtSectionHeadings);
+  const lines = buildStructuredLines(items);
 
   const midX = viewport.width / 2;
   const leftLines = lines.filter(line => line.x + line.width / 2 < midX);
@@ -314,17 +214,14 @@ export async function extractFirstImageFromPDF(file: File): Promise<string> {
     }
     type Candidate = { name: string; img: any; w: number; h: number; score: number };
     const candidates: Candidate[] = [];
-    const startedAt = Date.now();
-    for (const name of Array.from(new Set(imgNames))) {
-      if (Date.now() - startedAt > 2500) break;
-
-      const img: any = await withTimeout(new Promise(resolve => {
+    for (const name of imgNames) {
+      const img: any = await new Promise(resolve => {
         try {
           page.objs.get(name, (o: any) => resolve(o));
         } catch {
           resolve(null);
         }
-      }), 250, null);
+      });
       if (!img) continue;
       const w = img.width || img.bitmap?.width;
       const h = img.height || img.bitmap?.height;
@@ -441,26 +338,11 @@ const stripFormatting = (value: string) => value
   .replace(/\*\*/g, '')
   .trim();
 const normalizeLine = (value: string) => stripFormatting(value).replace(/\s+/g, ' ').trim();
-const cleanPdfSpacing = (value: string) => normalizeLine(value)
-  .replace(/\bA\s+(dvanced)\b/gi, 'Advanced')
-  .replace(/\bW\s+(eb)\b/gi, 'Web')
-  .replace(/\b(functionalit)\s+y\b/gi, 'functionality')
-  .replace(/\b(product)\s+s\b/gi, 'products')
-  .replace(/\s+([,.;:])/g, '$1')
-  .replace(/\s+-\s+/g, '-');
 const normalizeSectionCandidate = (value: string) => normalizeLine(value).replace(/:$/, '').trim();
 
 function isKnownSectionHeader(line: string): boolean {
   const normalized = normalizeSectionCandidate(line);
   return Object.values(SECTION_HEADERS).some(re => re.test(normalized));
-}
-
-function getSectionHeaderKey(line: string): string | null {
-  const normalized = normalizeSectionCandidate(line);
-  for (const [key, re] of Object.entries(SECTION_HEADERS)) {
-    if (re.test(normalized)) return key;
-  }
-  return null;
 }
 
 function looksLikeExperienceContinuation(text: string): boolean {
@@ -543,40 +425,6 @@ function moveContinuationBlock(
   result[targetKey] = [result[targetKey], ...movedBlocks].filter(Boolean).join('\n').trim();
 }
 
-function promoteEmbeddedSections(result: Record<string, string>) {
-  for (const sourceKey of Object.keys({ ...result })) {
-    const source = result[sourceKey];
-    if (!source) continue;
-
-    const lines = source.split('\n');
-    const buckets: Record<string, string[]> = { [sourceKey]: [] };
-    let currentKey = sourceKey;
-    let foundEmbeddedSection = false;
-
-    for (const line of lines) {
-      const headerKey = getSectionHeaderKey(line);
-      if (headerKey && headerKey !== sourceKey) {
-        currentKey = headerKey;
-        foundEmbeddedSection = true;
-        if (!buckets[currentKey]) buckets[currentKey] = [];
-        continue;
-      }
-
-      if (!buckets[currentKey]) buckets[currentKey] = [];
-      buckets[currentKey].push(line);
-    }
-
-    if (!foundEmbeddedSection) continue;
-
-    result[sourceKey] = (buckets[sourceKey] || []).join('\n').trim();
-    for (const [key, bucketLines] of Object.entries(buckets)) {
-      if (key === sourceKey) continue;
-      const value = bucketLines.join('\n').trim();
-      if (value) result[key] = [result[key], value].filter(Boolean).join('\n').trim();
-    }
-  }
-}
-
 function splitSections(text: string): Record<string, string> {
   const lines = text.split('\n');
   const sections: { key: string; lineIdx: number }[] = [];
@@ -585,16 +433,6 @@ function splitSections(text: string): Record<string, string> {
     const trimmed = normalizeSectionCandidate(lines[i]);
     if (!trimmed) continue;
     if (PAGE_MARKER_RE.test(trimmed)) continue;
-    if (/^experience$/i.test(trimmed)) {
-      const previous = normalizeLine(lines[i - 1] || '');
-      const next = normalizeLine(lines[i + 1] || '');
-      const aroundDuration = /\b(?:months?|month|years?|year)\b/i.test(previous)
-        || /^\d+(?:\.\d+)?$/i.test(previous)
-        || DATE_RANGE_RE.test(next)
-        || ACHIEVEMENT_START_RE.test(next);
-
-      if (aroundDuration) continue;
-    }
     for (const [key, re] of Object.entries(SECTION_HEADERS)) {
       if (re.test(trimmed)) {
         sections.push({ key, lineIdx: i });
@@ -625,7 +463,6 @@ function splitSections(text: string): Record<string, string> {
 
   moveContinuationBlock(result, 'skills', 'experience', looksLikeExperienceContinuation);
   moveHeaderExperienceBlock(result);
-  promoteEmbeddedSections(result);
 
   return result;
 }
@@ -708,7 +545,7 @@ function extractDateInfo(line: string): ExperienceDateInfo | null {
 }
 
 function cleanExperienceLine(line: string): string {
-  return cleanPdfSpacing(line)
+  return normalizeLine(line)
     .replace(DURATION_RE, '')
     .replace(DATE_RANGE_RE, '')
     .replace(CURRENTLY_WORKING_RE, '')
@@ -728,8 +565,6 @@ function isBareExperienceMetadata(value: string): boolean {
   const normalized = normalizeLine(value);
   if (!normalized) return true;
   if (PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return true;
-  if (/^\d+(?:\.\d+)?$/i.test(normalized)) return true;
-  if (/^(?:months?|mon\s*th|years?|year|of)$/i.test(normalized)) return true;
   if (CURRENTLY_WORKING_RE.test(normalized) || Boolean(extractDateInfo(normalized))) return true;
   return !extractAchievementCandidate(normalized);
 }
@@ -793,7 +628,7 @@ function looksLikeRoleTail(value: string): boolean {
 }
 
 function cleanExperienceBullet(value: string): string {
-  return cleanPdfSpacing(value)
+  return normalizeLine(value)
     .replace(/^here\b\s*/i, '')
     .replace(/^(?:months?|month|years?|experience)\b\s*/i, '')
     .replace(DURATION_RE, '')
@@ -981,8 +816,8 @@ function parseExperience(text: string): WorkExperience[] {
 
     const blockLines = [...block.lines];
     let lineIndex = 0;
-    const firstLine = cleanPdfSpacing(blockLines[0] || '');
-    const secondLine = cleanPdfSpacing(blockLines[1] || '');
+    const firstLine = normalizeLine(blockLines[0] || '');
+    const secondLine = normalizeLine(blockLines[1] || '');
     const firstCombinedEntry = splitCombinedCompanyRole(firstLine);
     const firstPipeParts = firstLine.split('|').map(part => part.trim()).filter(Boolean);
 
