@@ -441,6 +441,13 @@ const stripFormatting = (value: string) => value
   .replace(/\*\*/g, '')
   .trim();
 const normalizeLine = (value: string) => stripFormatting(value).replace(/\s+/g, ' ').trim();
+const cleanPdfSpacing = (value: string) => normalizeLine(value)
+  .replace(/\bA\s+(dvanced)\b/gi, 'Advanced')
+  .replace(/\bW\s+(eb)\b/gi, 'Web')
+  .replace(/\b(functionalit)\s+y\b/gi, 'functionality')
+  .replace(/\b(product)\s+s\b/gi, 'products')
+  .replace(/\s+([,.;:])/g, '$1')
+  .replace(/\s+-\s+/g, '-');
 const normalizeSectionCandidate = (value: string) => normalizeLine(value).replace(/:$/, '').trim();
 
 function isKnownSectionHeader(line: string): boolean {
