@@ -448,6 +448,14 @@ function isKnownSectionHeader(line: string): boolean {
   return Object.values(SECTION_HEADERS).some(re => re.test(normalized));
 }
 
+function getSectionHeaderKey(line: string): string | null {
+  const normalized = normalizeSectionCandidate(line);
+  for (const [key, re] of Object.entries(SECTION_HEADERS)) {
+    if (re.test(normalized)) return key;
+  }
+  return null;
+}
+
 function looksLikeExperienceContinuation(text: string): boolean {
   const normalized = text.trim();
   if (!normalized) return false;
@@ -528,6 +536,40 @@ function moveContinuationBlock(
   result[targetKey] = [result[targetKey], ...movedBlocks].filter(Boolean).join('\n').trim();
 }
 
+function promoteEmbeddedSections(result: Record<string, string>) {
+  for (const sourceKey of Object.keys({ ...result })) {
+    const source = result[sourceKey];
+    if (!source) continue;
+
+    const lines = source.split('\n');
+    const buckets: Record<string, string[]> = { [sourceKey]: [] };
+    let currentKey = sourceKey;
+    let foundEmbeddedSection = false;
+
+    for (const line of lines) {
+      const headerKey = getSectionHeaderKey(line);
+      if (headerKey && headerKey !== sourceKey) {
+        currentKey = headerKey;
+        foundEmbeddedSection = true;
+        if (!buckets[currentKey]) buckets[currentKey] = [];
+        continue;
+      }
+
+      if (!buckets[currentKey]) buckets[currentKey] = [];
+      buckets[currentKey].push(line);
+    }
+
+    if (!foundEmbeddedSection) continue;
+
+    result[sourceKey] = (buckets[sourceKey] || []).join('\n').trim();
+    for (const [key, bucketLines] of Object.entries(buckets)) {
+      if (key === sourceKey) continue;
+      const value = bucketLines.join('\n').trim();
+      if (value) result[key] = [result[key], value].filter(Boolean).join('\n').trim();
+    }
+  }
+}
+
 function splitSections(text: string): Record<string, string> {
   const lines = text.split('\n');
   const sections: { key: string; lineIdx: number }[] = [];
@@ -566,6 +608,7 @@ function splitSections(text: string): Record<string, string> {
 
   moveContinuationBlock(result, 'skills', 'experience', looksLikeExperienceContinuation);
   moveHeaderExperienceBlock(result);
+  promoteEmbeddedSections(result);
 
   return result;
 }
