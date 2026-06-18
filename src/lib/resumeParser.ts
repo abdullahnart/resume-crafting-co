@@ -30,6 +30,78 @@ const BULLET_PREFIX_RE = /^[•\-–—*►▪]\s*/;
 
 const normalizeStructuredText = (value: string) => value.replace(/\s+/g, ' ').trim();
 
+const STRUCTURAL_SECTION_WORDS = new Set([
+  'WORK',
+  'EXPERIENCE',
+  'WORK EXPERIENCE',
+  'WORK HISTORY',
+  'EMPLOYMENT',
+  'PROFESSIONAL EXPERIENCE',
+  'ADDRESS',
+  'CONTACT',
+  'ABOUT ME',
+  'SUMMARY',
+  'OBJECTIVE',
+  'PROFILE',
+  'PROFESSIONAL SUMMARY',
+  'SKILLS',
+  'TECHNICAL SKILLS',
+  'CORE COMPETENCIES',
+  'PROFICIENCIES',
+  'TECHNOLOGIES',
+  'EDUCATION',
+  'ACADEMIC',
+  'QUALIFICATIONS',
+  'LANGUAGE',
+  'LANGUAGES',
+  'CERTIFICATION',
+  'CERTIFICATIONS',
+  'LICENSE',
+  'LICENSES',
+  'CREDENTIALS',
+  'PROJECT',
+  'PROJECTS',
+  'PORTFOLIO',
+  'LINKS',
+]);
+
+const isStructuralSectionHeading = (value: string) => STRUCTURAL_SECTION_WORDS.has(normalizeStructuredText(value).replace(/:$/, '').toUpperCase());
+
+function splitLineAtSectionHeadings(line: StructuredLine): StructuredLine[] {
+  const raw = normalizeStructuredText(line.text);
+  const pattern = /\b(?:WORK|EXPERIENCE|WORK\s+EXPERIENCE|WORK\s+HISTORY|EMPLOYMENT|PROFESSIONAL\s+EXPERIENCE|ADDRESS|CONTACT|ABOUT\s+ME|SUMMARY|OBJECTIVE|PROFILE|PROFESSIONAL\s+SUMMARY|SKILLS|TECHNICAL\s+SKILLS|CORE\s+COMPETENCIES|PROFICIENCIES|TECHNOLOGIES|EDUCATION|ACADEMIC|QUALIFICATIONS|LANGUAGES?|CERTIFICATIONS?|LICENSES?|CREDENTIALS|PROJECTS?|PORTFOLIO|LINKS):?\b/gi;
+  const matches = Array.from(raw.matchAll(pattern)).filter(match => match.index !== undefined && isStructuralSectionHeading(match[0]));
+  if (!matches.length) return [line];
+
+  const pieces: string[] = [];
+  let cursor = 0;
+
+  for (const match of matches) {
+    const index = match.index || 0;
+    if (index > cursor) pieces.push(raw.slice(cursor, index).trim());
+    pieces.push(match[0].trim());
+    cursor = index + match[0].length;
+  }
+
+  if (cursor < raw.length) pieces.push(raw.slice(cursor).trim());
+  const cleanPieces = pieces.filter(Boolean);
+  if (cleanPieces.length <= 1) return [line];
+
+  const approximateCharWidth = raw.length ? line.width / raw.length : line.width;
+  let offset = 0;
+
+  return cleanPieces.map(piece => {
+    const index = raw.indexOf(piece, offset);
+    if (index >= 0) offset = index + piece.length;
+    return {
+      ...line,
+      text: piece,
+      x: line.x + Math.max(0, index) * approximateCharWidth,
+      width: Math.max(approximateCharWidth * piece.length, 1),
+    };
+  });
+}
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
   return new Promise(resolve => {
     let settled = false;
@@ -136,7 +208,7 @@ async function extractTextWithStructure(page: any): Promise<string> {
       width: item.width || item.str.length * 5,
     }));
 
-  const lines = buildStructuredLines(items);
+  const lines = buildStructuredLines(items).flatMap(splitLineAtSectionHeadings);
 
   const midX = viewport.width / 2;
   const leftLines = lines.filter(line => line.x + line.width / 2 < midX);
