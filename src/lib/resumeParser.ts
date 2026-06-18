@@ -729,7 +729,7 @@ function isBareExperienceMetadata(value: string): boolean {
   if (!normalized) return true;
   if (PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return true;
   if (/^\d+(?:\.\d+)?$/i.test(normalized)) return true;
-  if (/^(?:months?|month|years?|year|of)$/i.test(normalized)) return true;
+  if (/^(?:months?|mon\s*th|years?|year|of)$/i.test(normalized)) return true;
   if (CURRENTLY_WORKING_RE.test(normalized) || Boolean(extractDateInfo(normalized))) return true;
   return !extractAchievementCandidate(normalized);
 }
@@ -981,8 +981,8 @@ function parseExperience(text: string): WorkExperience[] {
 
     const blockLines = [...block.lines];
     let lineIndex = 0;
-    const firstLine = normalizeLine(blockLines[0] || '');
-    const secondLine = normalizeLine(blockLines[1] || '');
+    const firstLine = cleanPdfSpacing(blockLines[0] || '');
+    const secondLine = cleanPdfSpacing(blockLines[1] || '');
     const firstCombinedEntry = splitCombinedCompanyRole(firstLine);
     const firstPipeParts = firstLine.split('|').map(part => part.trim()).filter(Boolean);
 
