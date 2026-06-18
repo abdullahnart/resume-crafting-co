@@ -30,6 +30,34 @@ const BULLET_PREFIX_RE = /^[•\-–—*►▪]\s*/;
 
 const normalizeStructuredText = (value: string) => value.replace(/\s+/g, ' ').trim();
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+  return new Promise(resolve => {
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve(fallback);
+      }
+    }, timeoutMs);
+
+    promise
+      .then(value => {
+        if (!settled) {
+          settled = true;
+          window.clearTimeout(timer);
+          resolve(value);
+        }
+      })
+      .catch(() => {
+        if (!settled) {
+          settled = true;
+          window.clearTimeout(timer);
+          resolve(fallback);
+        }
+      });
+  });
+}
+
 function buildStructuredLines(pageItems: PositionedTextItem[]): StructuredLine[] {
   const lineMap = new Map<number, Array<{ str: string; x: number; width: number }>>();
 
@@ -214,14 +242,17 @@ export async function extractFirstImageFromPDF(file: File): Promise<string> {
     }
     type Candidate = { name: string; img: any; w: number; h: number; score: number };
     const candidates: Candidate[] = [];
-    for (const name of imgNames) {
-      const img: any = await new Promise(resolve => {
+    const startedAt = Date.now();
+    for (const name of Array.from(new Set(imgNames))) {
+      if (Date.now() - startedAt > 2500) break;
+
+      const img: any = await withTimeout(new Promise(resolve => {
         try {
           page.objs.get(name, (o: any) => resolve(o));
         } catch {
           resolve(null);
         }
-      });
+      }), 250, null);
       if (!img) continue;
       const w = img.width || img.bitmap?.width;
       const h = img.height || img.bitmap?.height;
