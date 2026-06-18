@@ -728,6 +728,8 @@ function isBareExperienceMetadata(value: string): boolean {
   const normalized = normalizeLine(value);
   if (!normalized) return true;
   if (PAGE_MARKER_RE.test(normalized) || isKnownSectionHeader(normalized)) return true;
+  if (/^\d+(?:\.\d+)?$/i.test(normalized)) return true;
+  if (/^(?:months?|month|years?|year|of)$/i.test(normalized)) return true;
   if (CURRENTLY_WORKING_RE.test(normalized) || Boolean(extractDateInfo(normalized))) return true;
   return !extractAchievementCandidate(normalized);
 }
