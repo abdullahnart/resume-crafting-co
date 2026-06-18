@@ -578,6 +578,16 @@ function splitSections(text: string): Record<string, string> {
     const trimmed = normalizeSectionCandidate(lines[i]);
     if (!trimmed) continue;
     if (PAGE_MARKER_RE.test(trimmed)) continue;
+    if (/^experience$/i.test(trimmed)) {
+      const previous = normalizeLine(lines[i - 1] || '');
+      const next = normalizeLine(lines[i + 1] || '');
+      const aroundDuration = /\b(?:months?|month|years?|year)\b/i.test(previous)
+        || /^\d+(?:\.\d+)?$/i.test(previous)
+        || DATE_RANGE_RE.test(next)
+        || ACHIEVEMENT_START_RE.test(next);
+
+      if (aroundDuration) continue;
+    }
     for (const [key, re] of Object.entries(SECTION_HEADERS)) {
       if (re.test(trimmed)) {
         sections.push({ key, lineIdx: i });
