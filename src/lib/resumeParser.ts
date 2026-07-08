@@ -94,6 +94,53 @@ function buildStructuredLines(pageItems: PositionedTextItem[]): StructuredLine[]
 
 const linesToText = (lines: StructuredLine[]) => lines.map(line => line.text).join('\n');
 
+// --- Column detection ---
+// Build an x-position histogram of line-start positions. If there is a clear
+// vertical gutter with almost no text crossing it, treat the page as
+// two-column and read each column top-to-bottom independently. Otherwise fall
+// back to the single-column path (with the legacy sidebar heuristic).
+function detectColumnSplit(lines: StructuredLine[], pageWidth: number): number | null {
+  if (lines.length < 10) return null;
+  const bins = 40;
+  const binWidth = pageWidth / bins;
+  const hist = new Array(bins).fill(0);
+  for (const line of lines) {
+    const bin = Math.min(bins - 1, Math.max(0, Math.floor(line.x / binWidth)));
+    hist[bin] += 1;
+  }
+
+  // Find the widest empty (or near-empty) run in the middle 35-70% of the page.
+  const startBin = Math.floor(bins * 0.35);
+  const endBin = Math.ceil(bins * 0.7);
+  let bestStart = -1;
+  let bestLen = 0;
+  let curStart = -1;
+  let curLen = 0;
+  for (let i = startBin; i < endBin; i++) {
+    if (hist[i] <= 1) {
+      if (curStart === -1) curStart = i;
+      curLen++;
+      if (curLen > bestLen) { bestLen = curLen; bestStart = curStart; }
+    } else {
+      curStart = -1;
+      curLen = 0;
+    }
+  }
+
+  if (bestLen < 2) return null;
+  const gutterX = (bestStart + bestLen / 2) * binWidth;
+
+  // Require enough content on both sides and few lines that straddle the gutter.
+  const leftCount = lines.filter(l => l.x + l.width <= gutterX + 4).length;
+  const rightCount = lines.filter(l => l.x >= gutterX - 4).length;
+  const straddleCount = lines.filter(l => l.x < gutterX - 4 && l.x + l.width > gutterX + 4).length;
+
+  if (leftCount < 6 || rightCount < 6) return null;
+  if (straddleCount > Math.max(2, lines.length * 0.05)) return null;
+
+  return gutterX;
+}
+
 // --- Coordinate-based PDF text extraction ---
 async function extractTextWithStructure(page: any): Promise<string> {
   const content = await page.getTextContent();
@@ -108,8 +155,36 @@ async function extractTextWithStructure(page: any): Promise<string> {
       width: item.width || item.str.length * 5,
     }));
 
-  const lines = buildStructuredLines(items);
+  const allLinesRaw = buildStructuredLines(items);
 
+  // Strict two-column detection: read each column top-to-bottom so sibling
+  // lines from adjacent columns don't get glued into one row.
+  const gutterX = detectColumnSplit(allLinesRaw, viewport.width);
+  if (gutterX !== null) {
+    const leftItems: PositionedTextItem[] = [];
+    const rightItems: PositionedTextItem[] = [];
+    for (const item of items) {
+      const center = item.x + (item.width || 0) / 2;
+      if (center < gutterX) leftItems.push(item);
+      else rightItems.push(item);
+    }
+    const leftLines = buildStructuredLines(leftItems);
+    const rightLines = buildStructuredLines(rightItems);
+
+    const scoreOf = (ls: StructuredLine[]) => {
+      const txt = linesToText(ls);
+      const bullets = (txt.match(BULLET_LINE_RE) || []).length;
+      const jobs = (txt.match(/\|/g) || []).length;
+      return bullets * 2 + jobs;
+    };
+    const [primary, secondary] = scoreOf(leftLines) >= scoreOf(rightLines)
+      ? [leftLines, rightLines]
+      : [rightLines, leftLines];
+
+    return [linesToText(primary), linesToText(secondary)].filter(Boolean).join('\n');
+  }
+
+  const lines = allLinesRaw;
   const midX = viewport.width / 2;
   const leftLines = lines.filter(line => line.x + line.width / 2 < midX);
   const rightLines = lines.filter(line => line.x + line.width / 2 >= midX);
