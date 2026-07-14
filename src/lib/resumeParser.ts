@@ -587,6 +587,57 @@ const ACHIEVEMENT_START_RE = /^(?:advanced|more\s+expertise|theme\s+and\s+plugin
 const DATE_TOKEN = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s*\\d{4}|\\d{1,2}[/-]\\d{4}|\\d{4}|present|current|now';
 const DATE_RANGE_RE = new RegExp(`(${DATE_TOKEN})\\s*(?:to|-|–|—)\\s*(${DATE_TOKEN})`, 'i');
 const CURRENTLY_WORKING_RE = /currently\s*(?:work|working)(?:\s*here)?/i;
+// Location heuristics: "City, ST", "City, Country", "City, State, Country", or Remote/Hybrid/Onsite.
+const LOCATION_RE = /^(?:remote|hybrid|on-?site|[A-Z][A-Za-z.\-]+(?:\s+[A-Z][A-Za-z.\-]+)*(?:\s*,\s*[A-Z][A-Za-z.\-]+(?:\s+[A-Z][A-Za-z.\-]+)*){1,2})$/;
+
+// Split a physical PDF line into column segments using the double-space
+// marker preserved by `buildStructuredLines` for wide intra-line x-gaps.
+function splitLineSegments(line: string): string[] {
+  return line.split(/\s{2,}|\t+/).map(s => s.trim()).filter(Boolean);
+}
+
+type HeaderSegmentClass = 'date' | 'location' | 'role' | 'company' | 'unknown';
+
+function classifyHeaderSegment(seg: string): HeaderSegmentClass {
+  const norm = normalizeLine(seg);
+  if (!norm) return 'unknown';
+  if (extractDateInfo(norm) || CURRENTLY_WORKING_RE.test(norm) || DURATION_RE.test(norm)) return 'date';
+  if (LOCATION_RE.test(norm)) return 'location';
+  if (looksLikeRoleLabel(norm) && !looksLikeCompanyName(norm)) return 'role';
+  if (looksLikeCompanyName(norm) || looksLikeStandaloneCompanyLine(norm)) return 'company';
+  return 'unknown';
+}
+
+// Fill role/company/dates/location on `entry` from a header row's column
+// segments. Returns true if at least one field was assigned.
+function assignHeaderSegments(entry: Partial<WorkExperience>, segments: string[]): boolean {
+  if (segments.length < 2) return false;
+  const classified = segments.map(seg => ({ seg, cls: classifyHeaderSegment(seg) }));
+
+  let assigned = false;
+  const leftovers: string[] = [];
+
+  for (const { seg, cls } of classified) {
+    if (cls === 'date') {
+      const di = extractDateInfo(seg);
+      if (di) { applyDateInfo(entry, di); assigned = true; }
+      else if (CURRENTLY_WORKING_RE.test(seg)) { applyDateInfo(entry, { endDate: 'Present', current: true }); assigned = true; }
+      continue;
+    }
+    if (cls === 'location' && !entry.location) { entry.location = seg; assigned = true; continue; }
+    if (cls === 'role' && !entry.role) { entry.role = seg; assigned = true; continue; }
+    if (cls === 'company' && !entry.company) { entry.company = seg; assigned = true; continue; }
+    leftovers.push(seg);
+  }
+
+  for (const seg of leftovers) {
+    if (!entry.company) { entry.company = seg; assigned = true; continue; }
+    if (!entry.role) { entry.role = seg; assigned = true; continue; }
+    if (!entry.location && LOCATION_RE.test(normalizeLine(seg))) { entry.location = seg; assigned = true; }
+  }
+
+  return assigned;
+}
 
 function normalizeDateValue(value: string): string {
   const cleaned = normalizeLine(value).replace(/\.$/, '');
