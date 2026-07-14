@@ -942,12 +942,29 @@ function parseExperience(text: string): WorkExperience[] {
 
     const blockLines = [...block.lines];
     let lineIndex = 0;
-    const firstLine = normalizeLine(blockLines[0] || '');
-    const secondLine = normalizeLine(blockLines[1] || '');
+    const firstRaw = blockLines[0] || '';
+    const firstLine = normalizeLine(firstRaw);
+    const secondRaw = blockLines[1] || '';
+    const secondLine = normalizeLine(secondRaw);
+    const firstSegments = splitLineSegments(firstRaw);
     const firstCombinedEntry = splitCombinedCompanyRole(firstLine);
     const firstPipeParts = firstLine.split('|').map(part => part.trim()).filter(Boolean);
 
-    if (firstCombinedEntry) {
+    // Column-aware header: when the physical row was split into distinct
+    // x-columns by the PDF extractor, classify each segment as
+    // role/company/dates/location instead of forcing the whole y-line into
+    // a single field.
+    if (firstSegments.length >= 2 && !firstLine.includes('|') && assignHeaderSegments(entry, firstSegments)) {
+      lineIndex = 1;
+      // A second header row may carry more column-split fields (e.g. dates + location under the title).
+      const secondSegments = splitLineSegments(secondRaw);
+      if (secondSegments.length >= 2 && !secondLine.includes('|')) {
+        const classified = secondSegments.map(classifyHeaderSegment);
+        const isHeaderRow = classified.every(c => c !== 'unknown')
+          || classified.some(c => c === 'date' || c === 'location');
+        if (isHeaderRow && assignHeaderSegments(entry, secondSegments)) lineIndex = 2;
+      }
+    } else if (firstCombinedEntry) {
       entry.company = firstCombinedEntry.company;
       entry.role = firstCombinedEntry.role;
       lineIndex = 1;
