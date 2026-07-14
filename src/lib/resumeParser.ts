@@ -1070,6 +1070,7 @@ function parseExperience(text: string): WorkExperience[] {
         id: uid(),
         company: entry.company || '',
         role: entry.role || '',
+        location: entry.location || '',
         startDate: entry.startDate || '',
         endDate: entry.endDate || '',
         current: entry.current || false,
