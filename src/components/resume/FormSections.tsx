@@ -123,7 +123,7 @@ export function ExperienceForm() {
   const items = data.experience;
 
   const add = () => updateField('experience', [...items, {
-    id: uid(), company: '', role: '', startDate: '', endDate: '', current: false, bullets: ['']
+    id: uid(), company: '', role: '', location: '', startDate: '', endDate: '', current: false, bullets: ['']
   }]);
 
   const update = (id: string, field: keyof WorkExperience, val: any) =>
