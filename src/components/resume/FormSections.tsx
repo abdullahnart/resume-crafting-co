@@ -123,7 +123,7 @@ export function ExperienceForm() {
   const items = data.experience;
 
   const add = () => updateField('experience', [...items, {
-    id: uid(), company: '', role: '', startDate: '', endDate: '', current: false, bullets: ['']
+    id: uid(), company: '', role: '', location: '', startDate: '', endDate: '', current: false, bullets: ['']
   }]);
 
   const update = (id: string, field: keyof WorkExperience, val: any) =>
@@ -178,6 +178,10 @@ export function ExperienceForm() {
                 disabled={exp.current}
                 placeholder="Dec 2023"
               />
+            </div>
+            <div className="col-span-2">
+              <Label>Location</Label>
+              <Input value={exp.location || ''} onChange={e => update(exp.id, 'location', e.target.value)} placeholder="City, Country" />
             </div>
           </div>
           <label className="flex items-center gap-2 text-sm">
