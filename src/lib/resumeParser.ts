@@ -1005,6 +1005,25 @@ function parseExperience(text: string): WorkExperience[] {
 
       if (!line || PAGE_MARKER_RE.test(line) || isKnownSectionHeader(line)) continue;
 
+      // Column-aware secondary header rows (e.g. dates + location under the title).
+      if (!isBullet) {
+        const segs = splitLineSegments(rawLine);
+        if (segs.length >= 2 && !line.includes('|')) {
+          const cls = segs.map(classifyHeaderSegment);
+          const looksLikeHeaderRow = cls.every(c => c !== 'unknown')
+            || (cls.some(c => c === 'date') && cls.some(c => c === 'location'));
+          if (looksLikeHeaderRow) {
+            assignHeaderSegments(entry, segs);
+            continue;
+          }
+        }
+      }
+
+      if (!entry.location && !isBullet && LOCATION_RE.test(line)) {
+        entry.location = line;
+        continue;
+      }
+
       if (CURRENTLY_WORKING_RE.test(line)) {
         applyDateInfo(entry, { endDate: 'Present', current: true });
         continue;
