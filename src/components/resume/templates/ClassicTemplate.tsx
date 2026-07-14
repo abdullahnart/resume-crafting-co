@@ -33,14 +33,15 @@ export function ClassicTemplate({ data, accentColor, design }: TemplateProps) {
           <h2 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>Experience</h2>
           {experience.map(exp => {
             const dateEl = <span className="text-gray-500 text-[10px]">{dateRange(exp.startDate, exp.endDate, exp.current, design)}</span>;
-            const roleEl = <span className="font-bold">{exp.role}</span>;
+            const roleEl = <span className="font-semibold">{exp.role}</span>;
             return (
               <div key={exp.id} className="mb-3">
                 <div className="flex justify-between">
                   {d.dateAlign === 'left' ? <>{dateEl}{roleEl}</> : <>{roleEl}{dateEl}</>}
                 </div>
-                <div className={`flex justify-between ${d.locationAlign === 'left' ? 'flex-row-reverse' : ''}`}>
-                  <p className="text-gray-600 italic">{exp.company}</p>
+                <div className="flex justify-between text-[10px]">
+                  <p className="font-bold text-gray-800">{exp.company}</p>
+                  {exp.location && <p className="text-gray-500 italic">{exp.location}</p>}
                 </div>
                 <ul className="list-disc list-inside mt-1 text-gray-700" style={{ lineHeight: d.listLineHeight }}>
                   {exp.bullets.filter(b => b).map((b, i) => <li key={i}>{b}</li>)}
