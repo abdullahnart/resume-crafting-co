@@ -178,7 +178,10 @@ export function ExperienceForm() {
                 disabled={exp.current}
                 placeholder="Dec 2023"
               />
-            </div>
+          </div>
+          <div>
+            <Label>Location</Label>
+            <Input value={exp.location || ''} onChange={e => update(exp.id, 'location', e.target.value)} placeholder="City, Country" />
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={exp.current} onChange={e => update(exp.id, 'current', e.target.checked)} />
