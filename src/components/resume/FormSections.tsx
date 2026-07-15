@@ -333,7 +333,7 @@ export function AdditionalForm() {
 
   // Projects
   const addProj = () => updateField('projects', [...data.projects, { id: uid(), name: '', description: '', url: '' }]);
-  const updateProj = (id: string, field: keyof Project, val: string) =>
+  const updateProj = (id: string, field: keyof Project, val: any) =>
     updateField('projects', data.projects.map(i => i.id === id ? { ...i, [field]: val } : i));
   const removeProj = (id: string) => updateField('projects', data.projects.filter(i => i.id !== id));
 
