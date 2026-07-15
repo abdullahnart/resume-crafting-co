@@ -110,6 +110,9 @@ export function ProfessionalTemplate({ data, accentColor, design }: TemplateProp
                   {proj.name}
                 </a>
                 {proj.description && <span className="text-gray-600"> — {proj.description}</span>}
+                {proj.technologies && proj.technologies.length > 0 && (
+                  <div className="text-gray-500 text-[10px] italic">{proj.technologies.join(' • ')}</div>
+                )}
               </div>
             ))}
           </div>
