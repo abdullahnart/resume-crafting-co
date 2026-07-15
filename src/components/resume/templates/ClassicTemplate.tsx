@@ -103,6 +103,9 @@ export function ClassicTemplate({ data, accentColor, design }: TemplateProps) {
               </a>
               {proj.description && <span className="text-gray-600"> — {proj.description}</span>}
               {proj.url && <span className="text-gray-500 text-[10px]"> ({proj.url})</span>}
+              {proj.technologies && proj.technologies.length > 0 && (
+                <div className="text-gray-500 text-[10px] italic">{proj.technologies.join(' • ')}</div>
+              )}
             </div>
           ))}
         </div>
