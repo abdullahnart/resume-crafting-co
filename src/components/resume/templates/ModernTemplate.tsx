@@ -113,6 +113,9 @@ export function ModernTemplate({ data, accentColor, design }: TemplateProps) {
                   {proj.name}
                 </a>
                 {proj.description && <p className="text-gray-600">{proj.description}</p>}
+                {proj.technologies && proj.technologies.length > 0 && (
+                  <p className="text-gray-500 text-[10px] italic">{proj.technologies.join(' • ')}</p>
+                )}
               </div>
             ))}
           </div>

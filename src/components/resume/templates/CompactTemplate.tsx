@@ -90,6 +90,9 @@ export function CompactTemplate({ data, accentColor, design }: TemplateProps) {
               <div key={proj.id} className="text-gray-600">
                 <a href={proj.url} target="_blank" rel="noreferrer" className="underline underline-offset-2">{proj.name}</a>
                 {proj.description && `: ${proj.description}`}
+                {proj.technologies && proj.technologies.length > 0 && (
+                  <span className="text-gray-500"> — {proj.technologies.join(' • ')}</span>
+                )}
               </div>
             ))}
           </div>

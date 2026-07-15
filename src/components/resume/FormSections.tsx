@@ -333,7 +333,7 @@ export function AdditionalForm() {
 
   // Projects
   const addProj = () => updateField('projects', [...data.projects, { id: uid(), name: '', description: '', url: '' }]);
-  const updateProj = (id: string, field: keyof Project, val: string) =>
+  const updateProj = (id: string, field: keyof Project, val: any) =>
     updateField('projects', data.projects.map(i => i.id === id ? { ...i, [field]: val } : i));
   const removeProj = (id: string) => updateField('projects', data.projects.filter(i => i.id !== id));
 
@@ -398,6 +398,11 @@ export function AdditionalForm() {
             </div>
             <Input value={p.name} onChange={e => updateProj(p.id, 'name', e.target.value)} placeholder="Project name" />
             <Textarea value={p.description} onChange={e => updateProj(p.id, 'description', e.target.value)} placeholder="Brief description..." className="min-h-[60px]" />
+            <Input
+              value={(p.technologies || []).join(', ')}
+              onChange={e => updateProj(p.id, 'technologies', e.target.value.split(',').map(s => s.trim()).filter(Boolean) as any)}
+              placeholder="Technologies (comma-separated)"
+            />
             <Input value={p.url} onChange={e => updateProj(p.id, 'url', e.target.value)} placeholder="https://..." />
           </div>
         ))}
