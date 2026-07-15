@@ -1207,22 +1207,133 @@ function parseSummary(text: string): string {
 
 // --- Projects/Portfolio ---
 
+const URL_RE = /((?:https?:\/\/|www\.)[^\s,;)]+|[a-z0-9-]+\.(?:com|net|org|io|dev|app|co|ai|me|xyz|tech|site|page|gg|so)(?:\/[^\s,;)]*)?)/gi;
+const TECH_LABEL_RE = /^(?:tech(?:nolog(?:y|ies))?|tech\s*stack|stack|tools?|built\s*with|made\s*with|frameworks?|languages?)\s*[:\-–—]\s*(.+)$/i;
+const BULLET_STRIP_RE = /^[\s]*[•●◦∙▪■◆➤►·\-*–—]+\s*/;
+
+function stripBullet(line: string): string {
+  return line.replace(BULLET_STRIP_RE, '').trim();
+}
+
+function splitTechList(value: string): string[] {
+  return value
+    .split(/[,;|/]|\s•\s|\s·\s/)
+    .map(t => t.replace(/[.\s]+$/g, '').trim())
+    .filter(t => t && t.length <= 40);
+}
+
+function normalizeUrl(raw: string): string {
+  const cleaned = raw.replace(/[),.;]+$/, '');
+  if (/^https?:\/\//i.test(cleaned)) return cleaned;
+  return `https://${cleaned.replace(/^www\./i, 'www.')}`;
+}
+
+function cleanProjectName(raw: string): string {
+  let name = stripBullet(raw)
+    .replace(URL_RE, '')
+    .replace(/[|•·–—-]\s*$/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  // If line contains " - " or " – " or " | " followed by description, keep only left side as name
+  const sep = name.match(/^(.{2,80}?)\s+[|\-–—:]\s+(.+)$/);
+  if (sep && sep[1].split(' ').length <= 8) name = sep[1].trim();
+  return name.replace(/[:\-–—|]+$/, '').trim();
+}
+
+function extractTailAfterName(raw: string, name: string): string {
+  const stripped = stripBullet(raw).replace(URL_RE, '').trim();
+  if (!name || !stripped.toLowerCase().startsWith(name.toLowerCase())) return '';
+  return stripped.slice(name.length).replace(/^[\s|\-–—:•·]+/, '').trim();
+}
+
 function parseProjects(text: string): Project[] {
   if (!text) return [];
-  const urlRe = /(?:https?:\/\/)?(?:www\.)?[\w.-]+\.[a-z]{2,}(?:\/[^\s]*)?/gi;
-  const urls = text.match(urlRe) || [];
-  
-  return urls.map(url => {
-    const cleanUrl = url.startsWith('http') ? url : `https://${url}`;
-    const name = url.replace(/https?:\/\//, '').replace(/www\./, '').replace(/\/$/, '');
-    return {
+
+  const rawLines = text.split('\n').map(l => l.replace(/\s+$/, ''));
+  // Group into blocks separated by blank lines.
+  const blocks: string[][] = [];
+  let current: string[] = [];
+  for (const line of rawLines) {
+    if (!line.trim()) {
+      if (current.length) { blocks.push(current); current = []; }
+      continue;
+    }
+    current.push(line);
+  }
+  if (current.length) blocks.push(current);
+
+  // If a single big block, sub-split when a non-bullet line follows bullet lines (new project heading)
+  const finalBlocks: string[][] = [];
+  for (const block of blocks) {
+    let buf: string[] = [];
+    let sawBullet = false;
+    for (const line of block) {
+      const isBullet = BULLET_STRIP_RE.test(line) || /^\s{2,}/.test(line);
+      if (!isBullet && sawBullet && buf.length) {
+        finalBlocks.push(buf);
+        buf = [];
+        sawBullet = false;
+      }
+      if (isBullet) sawBullet = true;
+      buf.push(line);
+    }
+    if (buf.length) finalBlocks.push(buf);
+  }
+
+  const projects: Project[] = [];
+  for (const block of finalBlocks) {
+    const joined = block.join('\n');
+    const urls = joined.match(URL_RE) || [];
+    const url = urls.length ? normalizeUrl(urls[0]) : '';
+
+    // Find technologies line
+    let technologies: string[] = [];
+    const descLines: string[] = [];
+    let nameLine = '';
+
+    for (let i = 0; i < block.length; i++) {
+      const line = block[i];
+      const stripped = stripBullet(line).replace(URL_RE, '').trim();
+      const techMatch = stripped.match(TECH_LABEL_RE);
+      if (techMatch) {
+        technologies = splitTechList(techMatch[1]);
+        continue;
+      }
+      if (!nameLine) {
+        nameLine = line;
+        const tail = extractTailAfterName(line, cleanProjectName(line));
+        if (tail) descLines.push(tail);
+      } else {
+        if (stripped) descLines.push(stripped);
+      }
+    }
+
+    const name = nameLine ? cleanProjectName(nameLine) : (url ? url.replace(/^https?:\/\//, '').replace(/\/$/, '') : '');
+    if (!name && !url) continue;
+
+    // If technologies not labelled, try last desc line if it looks like a comma-separated tech list
+    if (!technologies.length && descLines.length) {
+      const last = descLines[descLines.length - 1];
+      const parts = splitTechList(last);
+      const looksTech = parts.length >= 2 && parts.every(p => /^[A-Za-z0-9.+#/\- ]{1,25}$/.test(p)) && !/[.!?]$/.test(last);
+      if (looksTech) {
+        technologies = parts;
+        descLines.pop();
+      }
+    }
+
+    projects.push({
       id: uid(),
       name,
-      description: '',
-      url: cleanUrl,
-    };
-  });
+      description: descLines.join(' ').replace(/\s{2,}/g, ' ').trim(),
+      url,
+      ...(technologies.length ? { technologies } : {}),
+    });
+  }
+
+  return projects;
 }
+
 
 // --- Main export ---
 
