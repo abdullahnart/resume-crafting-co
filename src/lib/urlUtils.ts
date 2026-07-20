@@ -25,7 +25,7 @@ export function sanitizeUrl(raw: string | undefined | null): string | null {
     value = value.slice(0, -1);
   }
 
-  if (EMAIL_RE.test(value)) value = `mailto:${value}`;
+  if (!HAS_SCHEME_RE.test(value) && EMAIL_RE.test(value)) value = `mailto:${value}`;
 
   if (HAS_SCHEME_RE.test(value)) {
     if (!SAFE_SCHEME_RE.test(value)) return null;
@@ -39,7 +39,9 @@ export function sanitizeUrl(raw: string | undefined | null): string | null {
     const u = new URL(value);
     if (!SAFE_SCHEME_RE.test(u.protocol)) return null;
     if ((u.protocol === 'http:' || u.protocol === 'https:') && !u.hostname.includes('.')) return null;
-    return u.toString().replace(/\/$/, u.pathname === '/' ? '/' : '');
+    const str = u.toString();
+    if (u.pathname === '/' && !u.search && !u.hash) return str.replace(/\/$/, '');
+    return str;
   } catch {
     return null;
   }
