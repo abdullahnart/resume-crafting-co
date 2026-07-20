@@ -1,5 +1,5 @@
 import { TemplateProps } from '@/types/resume';
-import { getDesign, dateRange, alignClass, fmt, SkillsList } from '@/lib/templateHelpers';
+import { getDesign, dateRange, alignClass, fmt, SkillsList, ProjectLink } from '@/lib/templateHelpers';
 
 export function MinimalTemplate({ data, accentColor, design }: TemplateProps) {
   const { personalInfo: p, summary, experience, education, skills, languages, certifications, projects } = data;
@@ -90,9 +90,7 @@ export function MinimalTemplate({ data, accentColor, design }: TemplateProps) {
           <h2 className="text-[10px] uppercase tracking-[0.2em] mb-2" style={{ color: accentColor }}>Projects</h2>
           {projects.map(proj => (
             <div key={proj.id} className="mb-1">
-              <a href={proj.url} target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-2">
-                {proj.name}
-              </a>
+              <ProjectLink url={proj.url} name={proj.name} className="font-semibold underline underline-offset-2" />
               {proj.description && <span className="text-gray-500"> — {proj.description}</span>}
               {proj.technologies && proj.technologies.length > 0 && (
                 <div className="text-gray-500 text-[10px] italic">{proj.technologies.join(' • ')}</div>

@@ -1,4 +1,5 @@
 import { ResumeData, WorkExperience, Education, Skill, Language, Certification, Project } from '@/types/resume';
+import { sanitizeUrl } from './urlUtils';
 
 const uid = () => crypto.randomUUID();
 
@@ -1223,9 +1224,7 @@ function splitTechList(value: string): string[] {
 }
 
 function normalizeUrl(raw: string): string {
-  const cleaned = raw.replace(/[),.;]+$/, '');
-  if (/^https?:\/\//i.test(cleaned)) return cleaned;
-  return `https://${cleaned.replace(/^www\./i, 'www.')}`;
+  return sanitizeUrl(raw) ?? '';
 }
 
 function cleanProjectName(raw: string): string {

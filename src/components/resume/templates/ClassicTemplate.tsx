@@ -1,5 +1,5 @@
 import { TemplateProps } from '@/types/resume';
-import { getDesign, fmt, dateRange, alignClass, SkillsList } from '@/lib/templateHelpers';
+import { getDesign, fmt, dateRange, alignClass, SkillsList, ProjectLink, displayUrl } from '@/lib/templateHelpers';
 
 export function ClassicTemplate({ data, accentColor, design }: TemplateProps) {
   const { personalInfo: p, summary, experience, education, languages, certifications, projects, skills } = data;
@@ -98,11 +98,9 @@ export function ClassicTemplate({ data, accentColor, design }: TemplateProps) {
           <h2 className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: accentColor }}>Projects</h2>
           {projects.map(proj => (
             <div key={proj.id} className="mb-1">
-              <a href={proj.url} target="_blank" rel="noreferrer" className="font-bold underline underline-offset-2">
-                {proj.name}
-              </a>
+              <ProjectLink url={proj.url} name={proj.name} className="font-bold underline underline-offset-2" />
               {proj.description && <span className="text-gray-600"> — {proj.description}</span>}
-              {proj.url && <span className="text-gray-500 text-[10px]"> ({proj.url})</span>}
+              {displayUrl(proj.url) && <span className="text-gray-500 text-[10px]"> ({displayUrl(proj.url)})</span>}
               {proj.technologies && proj.technologies.length > 0 && (
                 <div className="text-gray-500 text-[10px] italic">{proj.technologies.join(' • ')}</div>
               )}
