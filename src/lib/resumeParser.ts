@@ -1,4 +1,5 @@
 import { ResumeData, WorkExperience, Education, Skill, Language, Certification, Project } from '@/types/resume';
+import { sanitizeUrl } from './urlUtils';
 
 const uid = () => crypto.randomUUID();
 
