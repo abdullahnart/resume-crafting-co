@@ -25,7 +25,7 @@ export function sanitizeUrl(raw: string | undefined | null): string | null {
     value = value.slice(0, -1);
   }
 
-  if (EMAIL_RE.test(value)) value = `mailto:${value}`;
+  if (!HAS_SCHEME_RE.test(value) && EMAIL_RE.test(value)) value = `mailto:${value}`;
 
   if (HAS_SCHEME_RE.test(value)) {
     if (!SAFE_SCHEME_RE.test(value)) return null;
