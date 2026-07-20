@@ -38,9 +38,9 @@ export function sanitizeUrl(raw: string | undefined | null): string | null {
   try {
     const u = new URL(value);
     if (!SAFE_SCHEME_RE.test(u.protocol)) return null;
-    if ((u.protocol === 'http:' || u.protocol === 'https:') && !u.hostname.includes('.')) return null;
-    return u.toString().replace(/\/$/, u.pathname === '/' ? '/' : '');
-  } catch {
+    const str = u.toString();
+    if (u.pathname === '/' && !u.search && !u.hash) return str.replace(/\/$/, '');
+    return str;
     return null;
   }
 }
