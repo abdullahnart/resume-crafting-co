@@ -106,9 +106,7 @@ export function ProfessionalTemplate({ data, accentColor, design }: TemplateProp
             <h2 className="text-xs font-bold uppercase tracking-wider pb-1 border-b-2 mb-2" style={{ color: accentColor, borderColor: accentColor }}>Projects</h2>
             {projects.map(proj => (
               <div key={proj.id} className="mb-1">
-                <a href={proj.url} target="_blank" rel="noreferrer" className="font-bold underline underline-offset-2">
-                  {proj.name}
-                </a>
+                <ProjectLink url={proj.url} name={proj.name} className="font-bold underline underline-offset-2" />
                 {proj.description && <span className="text-gray-600"> — {proj.description}</span>}
                 {proj.technologies && proj.technologies.length > 0 && (
                   <div className="text-gray-500 text-[10px] italic">{proj.technologies.join(' • ')}</div>

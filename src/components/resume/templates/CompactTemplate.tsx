@@ -1,5 +1,5 @@
 import { TemplateProps } from '@/types/resume';
-import { getDesign, dateRange, alignClass, fmt, SkillsList } from '@/lib/templateHelpers';
+import { getDesign, dateRange, alignClass, fmt, SkillsList, ProjectLink } from '@/lib/templateHelpers';
 
 export function CompactTemplate({ data, accentColor, design }: TemplateProps) {
   const { personalInfo: p, summary, experience, education, skills, languages, certifications, projects } = data;
@@ -88,7 +88,7 @@ export function CompactTemplate({ data, accentColor, design }: TemplateProps) {
           <div className="space-y-0.5">
             {projects.map(proj => (
               <div key={proj.id} className="text-gray-600">
-                <a href={proj.url} target="_blank" rel="noreferrer" className="underline underline-offset-2">{proj.name}</a>
+                <ProjectLink url={proj.url} name={proj.name} className="underline underline-offset-2" />
                 {proj.description && `: ${proj.description}`}
                 {proj.technologies && proj.technologies.length > 0 && (
                   <span className="text-gray-500"> — {proj.technologies.join(' • ')}</span>
