@@ -109,3 +109,21 @@ export function AdvancedDesignStyles({ design, scopeId }: { design?: DesignSetti
 `;
   return <style dangerouslySetInnerHTML={{ __html: css }} />;
 }
+
+export { sanitizeUrl, displayUrl } from './urlUtils';
+
+import { sanitizeUrl as _sanitize } from './urlUtils';
+
+export function ProjectLink({
+  url,
+  name,
+  className = '',
+}: { url?: string; name: string; className?: string }) {
+  const safe = _sanitize(url);
+  if (!safe) return <span className={className}>{name || url || ''}</span>;
+  return (
+    <a href={safe} target="_blank" rel="noopener noreferrer nofollow" className={className}>
+      {name || safe}
+    </a>
+  );
+}
