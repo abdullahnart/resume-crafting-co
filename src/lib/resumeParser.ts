@@ -1223,7 +1223,6 @@ function splitTechList(value: string): string[] {
     .filter(t => t && t.length <= 40);
 }
 
-import { sanitizeUrl } from './urlUtils';
 function normalizeUrl(raw: string): string {
   return sanitizeUrl(raw) ?? '';
 }
