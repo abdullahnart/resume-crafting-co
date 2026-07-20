@@ -1,5 +1,5 @@
 import { TemplateProps } from '@/types/resume';
-import { getDesign, fmt, dateRange, alignClass, SkillsList } from '@/lib/templateHelpers';
+import { getDesign, fmt, dateRange, alignClass, SkillsList, ProjectLink, displayUrl } from '@/lib/templateHelpers';
 
 export function ClassicTemplate({ data, accentColor, design }: TemplateProps) {
   const { personalInfo: p, summary, experience, education, languages, certifications, projects, skills } = data;
