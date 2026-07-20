@@ -1222,10 +1222,9 @@ function splitTechList(value: string): string[] {
     .filter(t => t && t.length <= 40);
 }
 
+import { sanitizeUrl } from './urlUtils';
 function normalizeUrl(raw: string): string {
-  const cleaned = raw.replace(/[),.;]+$/, '');
-  if (/^https?:\/\//i.test(cleaned)) return cleaned;
-  return `https://${cleaned.replace(/^www\./i, 'www.')}`;
+  return sanitizeUrl(raw) ?? '';
 }
 
 function cleanProjectName(raw: string): string {
