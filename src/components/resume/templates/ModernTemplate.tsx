@@ -109,9 +109,7 @@ export function ModernTemplate({ data, accentColor, design }: TemplateProps) {
             <h2 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>Projects</h2>
             {projects.map(proj => (
               <div key={proj.id} className="mb-2">
-                <a href={proj.url} target="_blank" rel="noreferrer" className="font-bold underline underline-offset-2">
-                  {proj.name}
-                </a>
+                <ProjectLink url={proj.url} name={proj.name} className="font-bold underline underline-offset-2" />
                 {proj.description && <p className="text-gray-600">{proj.description}</p>}
                 {proj.technologies && proj.technologies.length > 0 && (
                   <p className="text-gray-500 text-[10px] italic">{proj.technologies.join(' • ')}</p>
